@@ -12,9 +12,8 @@ using namespace openu;
 
 namespace {
 
-ViewPoint buildViewFromLegacyWorldToClip(const float legacy[16], const Vec3& position) {
+ViewPoint makeViewFromLegacyClip(const float legacy[16]) {
     ViewPoint view{};
-    view.position = position;
     view.view = Mat4::identity();
     view.projection.m[0] = legacy[0]; view.projection.m[1] = legacy[1]; view.projection.m[2] = legacy[2]; view.projection.m[3] = legacy[3];
     view.projection.m[4] = legacy[4]; view.projection.m[5] = legacy[5]; view.projection.m[6] = legacy[6]; view.projection.m[7] = legacy[7];
@@ -56,7 +55,7 @@ void testRasterizesAndClassifiesLeaves() {
         0.0f, 0.0f, 1.0f, 1.0f,
         0.0f, 0.0f, 0.0f, 0.0f
     };
-    ViewPoint view = buildViewFromLegacyWorldToClip(legacy, {0.0f, 0.0f, 0.0f});
+    ViewPoint view = makeViewFromLegacyClip(legacy);
 
     OctreeRasterizer rasterizer(256, 256);
     const std::vector<const OctreeNode*> visible = rasterizer.visibleCells(tree, view);

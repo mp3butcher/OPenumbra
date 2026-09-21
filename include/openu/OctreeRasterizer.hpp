@@ -8,14 +8,25 @@ class MaskedOcclusionCulling;
 namespace openu {
 
 struct ViewPoint {
-    Vec3 position{};
     Mat4 view = Mat4::identity();
     Mat4 projection = Mat4::identity();
 
-    // Backward-compatible helper for existing code/tests that still populate a
-    // single worldToClip matrix. If the view/projection matrices are identity,
-    // this returns the legacy matrix value.
     Mat4 worldToClip() const { return projection * view; }
+
+    Vec3 cameraPosition() const {
+        const float tx = view.m[3];
+        const float ty = view.m[7];
+        const float tz = view.m[11];
+
+        // Row-major world-to-camera matrix; camera space is camera's local space.
+        // For a rigid camera transform, the world-space camera position is the
+        // negative of the rotation-transformed translation.
+        return {
+            -(view.m[0] * tx + view.m[1] * ty + view.m[2] * tz),
+            -(view.m[4] * tx + view.m[5] * ty + view.m[6] * tz),
+            -(view.m[8] * tx + view.m[9] * ty + view.m[10] * tz)
+        };
+    }
 };
 
 struct RasterizedOctree {
@@ -33,9 +44,7 @@ public:
     OctreeRasterizer(const OctreeRasterizer&) = delete;
     OctreeRasterizer& operator=(const OctreeRasterizer&) = delete;
 
-    // Conservative culling from the camera's cell frontier.
     std::vector<const OctreeNode*> visibleCells(const OcclusionOctree& tree, const ViewPoint& view) const;
-
     RasterizedOctree rasterize(OcclusionOctree& tree, const ViewPoint& view);
 
 private:

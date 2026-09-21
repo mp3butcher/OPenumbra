@@ -30,12 +30,6 @@ ClipVertex transform(const Vec3& p, const Mat4& worldToClip) {
     return {x, y, z, w};
 }
 
-bool pointInFrustum(const Vec3& point, const ViewPoint& view) {
-    const Mat4 clip = view.worldToClip();
-    const ClipVertex q = transform(point, clip);
-    return q.w > 0.0f && std::abs(q.x) <= q.w && std::abs(q.y) <= q.w;
-}
-
 bool aabbIntersectsFrustum(const AABB& box, const ViewPoint& view) {
     const Mat4 clip = view.worldToClip();
     for (const Vec3& v : corners(box)) {
@@ -97,7 +91,7 @@ std::vector<const OctreeNode*> OctreeRasterizer::visibleCells(const OcclusionOct
     std::unordered_set<const OctreeNode*> visited;
     std::vector<const OctreeNode*> frontier;
 
-    const OctreeNode* start = tree.locate(view.position);
+    const OctreeNode* start = tree.locate(view.cameraPosition());
     if (!start) return visible;
 
     frontier.push_back(start);
