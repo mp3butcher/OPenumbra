@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <vector>
 #include "openu/Octree.hpp"
 
@@ -9,8 +8,14 @@ class MaskedOcclusionCulling;
 namespace openu {
 
 struct ViewPoint {
-    // Row-major matrix multiplying [x y z 1]. The resulting clip-space w must be positive.
-    float worldToClip[16]{};
+    Vec3 position{};
+    Mat4 view = Mat4::identity();
+    Mat4 projection = Mat4::identity();
+
+    // Backward-compatible helper for existing code/tests that still populate a
+    // single worldToClip matrix. If the view/projection matrices are identity,
+    // this returns the legacy matrix value.
+    Mat4 worldToClip() const { return projection * view; }
 };
 
 struct RasterizedOctree {
@@ -28,8 +33,9 @@ public:
     OctreeRasterizer(const OctreeRasterizer&) = delete;
     OctreeRasterizer& operator=(const OctreeRasterizer&) = delete;
 
-    // Occupied leaf AABBs are rendered as conservative occluders. Empty leaves
-    // are then tested against the resulting hierarchical depth buffer.
+    // Conservative culling from the camera's cell frontier.
+    std::vector<const OctreeNode*> visibleCells(const OcclusionOctree& tree, const ViewPoint& view) const;
+
     RasterizedOctree rasterize(OcclusionOctree& tree, const ViewPoint& view);
 
 private:

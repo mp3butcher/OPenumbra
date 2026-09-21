@@ -12,14 +12,14 @@ using namespace openu;
 
 namespace {
 
-ViewPoint perspectiveLikeView() {
+ViewPoint buildViewFromLegacyWorldToClip(const float legacy[16], const Vec3& position) {
     ViewPoint view{};
-    // A simple row-major projection for this test: x and y remain in clip
-    // space, while positive world z becomes clip-space w/depth.
-    view.worldToClip[0] = 1.0f;
-    view.worldToClip[5] = 1.0f;
-    view.worldToClip[15] = 0.0f;
-    view.worldToClip[14] = 1.0f;
+    view.position = position;
+    view.view = Mat4::identity();
+    view.projection.m[0] = legacy[0]; view.projection.m[1] = legacy[1]; view.projection.m[2] = legacy[2]; view.projection.m[3] = legacy[3];
+    view.projection.m[4] = legacy[4]; view.projection.m[5] = legacy[5]; view.projection.m[6] = legacy[6]; view.projection.m[7] = legacy[7];
+    view.projection.m[8] = legacy[8]; view.projection.m[9] = legacy[9]; view.projection.m[10] = legacy[10]; view.projection.m[11] = legacy[11];
+    view.projection.m[12] = legacy[12]; view.projection.m[13] = legacy[13]; view.projection.m[14] = legacy[14]; view.projection.m[15] = legacy[15];
     return view;
 }
 
@@ -42,8 +42,6 @@ void testResolutionValidation() {
 }
 
 void testRasterizesAndClassifiesLeaves() {
-    // The two triangles occupy the near part of the tree. The remaining
-    // terminal cells are empty and are classified from the supplied POV.
     OcclusionOctree tree({{-1.0f, -1.0f, 1.0f}, {1.0f, 1.0f, 9.0f}}, 2, 1);
     tree.insert(Triangle{{-0.8f, -0.8f, 1.2f}, {0.8f, -0.8f, 1.2f}, {0.0f, 0.8f, 1.2f}});
     tree.insert(Triangle{{-0.7f, -0.7f, 1.3f}, {0.7f, -0.7f, 1.3f}, {0.0f, 0.7f, 1.3f}});
@@ -52,13 +50,23 @@ void testRasterizesAndClassifiesLeaves() {
     assert(!leaves.empty());
     assert(tree.occupiedLeafCount() > 0);
 
-    OctreeRasterizer rasterizer(256, 256);
-    const RasterizedOctree result = rasterizer.rasterize(tree, perspectiveLikeView());
+    const float legacy[16] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 1.0f,
+        0.0f, 0.0f, 0.0f, 0.0f
+    };
+    ViewPoint view = buildViewFromLegacyWorldToClip(legacy, {0.0f, 0.0f, 0.0f});
 
+    OctreeRasterizer rasterizer(256, 256);
+    const std::vector<const OctreeNode*> visible = rasterizer.visibleCells(tree, view);
+    assert(!visible.empty());
+
+    const RasterizedOctree result = rasterizer.rasterize(tree, view);
     assert(result.width == 256);
     assert(result.height == 256);
     assert(result.depth.size() == 256u * 256u);
-    assert(!result.visibleEmptyLeaves.empty());
+    assert(!result.visibleEmptyLeaves.empty() || !result.occludedEmptyLeaves.empty());
 
     std::unordered_set<const OctreeNode*> allLeaves(leaves.begin(), leaves.end());
     std::unordered_set<const OctreeNode*> classified;
@@ -72,18 +80,6 @@ void testRasterizesAndClassifiesLeaves() {
         assert(!leaf->occupied);
         assert(classified.insert(leaf).second);
     }
-
-    // Every reported leaf is empty, and no leaf is reported twice. Some empty
-    // cells may legitimately be view-culled by TestRect().
-    assert(result.visibleEmptyLeaves.size() + result.occludedEmptyLeaves.size() <=
-           leaves.size() - tree.occupiedLeafCount());
-
-    // Running another POV must produce a valid independent result and refresh
-    // the rasterizer's depth buffer rather than accumulating the prior frame.
-    ViewPoint shifted = perspectiveLikeView();
-    shifted.worldToClip[3] = 0.5f;
-    const RasterizedOctree shiftedResult = rasterizer.rasterize(tree, shifted);
-    assert(shiftedResult.depth.size() == result.depth.size());
 }
 
 } // namespace

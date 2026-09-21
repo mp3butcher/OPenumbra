@@ -18,6 +18,40 @@ struct Vec3 {
     Vec3 operator+(const Vec3& v) const { return {x + v.x, y + v.y, z + v.z}; }
     Vec3 operator-(const Vec3& v) const { return {x - v.x, y - v.y, z - v.z}; }
     Vec3 operator*(float s) const { return {x * s, y * s, z * s}; }
+    Vec3 operator/(float s) const { return {x / s, y / s, z / s}; }
+};
+
+struct Mat4 {
+    float m[16]{};
+
+    static Mat4 identity() {
+        Mat4 out{};
+        out.m[0] = 1.0f; out.m[5] = 1.0f; out.m[10] = 1.0f; out.m[15] = 1.0f;
+        return out;
+    }
+
+    Mat4 operator*(const Mat4& rhs) const {
+        Mat4 out{};
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                float sum = 0.0f;
+                for (int k = 0; k < 4; ++k) {
+                    sum += m[row * 4 + k] * rhs.m[k * 4 + col];
+                }
+                out.m[row * 4 + col] = sum;
+            }
+        }
+        return out;
+    }
+
+    Vec3 transformPoint(const Vec3& p) const {
+        const float x = m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3];
+        const float y = m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7];
+        const float z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
+        const float w = m[12] * p.x + m[13] * p.y + m[14] * p.z + m[15];
+        if (std::abs(w) > 1e-6f) return {x / w, y / w, z / w};
+        return {x, y, z};
+    }
 };
 
 struct Triangle {
@@ -41,7 +75,6 @@ struct AABB {
                p.z >= min.z && p.z <= max.z;
     }
 
-    // Separating-axis test for a triangle and an axis-aligned box.
     bool intersectsTriangle(const Triangle& t) const {
         const Vec3 center = this->center();
         const Vec3 half = {(max.x - min.x) * 0.5f, (max.y - min.y) * 0.5f, (max.z - min.z) * 0.5f};
@@ -97,8 +130,6 @@ struct OctreeNode {
     bool terminal() const { return children[0] == nullptr; }
     static ChildCode mask(Axis axis) { return axis == Axis::X ? X : axis == Axis::Y ? Y : Z; }
 
-    // Returns the terminal node reached on the requested face. If the opposite
-    // branch is coarser, that terminal/coarser node is returned immediately.
     OctreeNode* getNeighbor(Axis axis, Direction direction) const {
         const ChildCode bit = mask(axis);
         const bool positive = direction == Direction::Positive;
@@ -120,7 +151,6 @@ struct OctreeNode {
 
         for (ChildCode code : suffix) {
             if (result->terminal()) break;
-            // The neighbor is across the face: descend through its opposite side.
             const ChildCode next = static_cast<ChildCode>((code & ~bit) | (positive ? 0 : bit));
             if (!result->children[next]) break;
             result = result->children[next].get();
@@ -128,8 +158,6 @@ struct OctreeNode {
         return result;
     }
 
-    // Collects terminal nodes touching the requested face. This handles an
-    // adaptive tree where the opposite side is finer and one cell meets 2 or 4 cells.
     void getNeighbors(Axis axis, Direction direction, std::vector<OctreeNode*>& out) const {
         const ChildCode bit = mask(axis);
         const bool positive = direction == Direction::Positive;
@@ -156,11 +184,9 @@ struct OctreeNode {
 
 private:
     static void collectFaceLeaves(OctreeNode* node, Axis axis, bool positiveFromSource,
-                                  std::vector<OctreeNode*>& out) {
+                                 std::vector<OctreeNode*>& out) {
         if (node->terminal()) { out.push_back(node); return; }
         const ChildCode bit = mask(axis);
-        // On the neighbor, the touching face is its negative side for a positive
-        // source direction, and its positive side for a negative source direction.
         const ChildCode face = positiveFromSource ? 0 : bit;
         for (std::uint8_t i = 0; i < 8; ++i) {
             if ((i & bit) == face) collectFaceLeaves(node->children[i].get(), axis, positiveFromSource, out);
@@ -178,6 +204,21 @@ public:
 
     OctreeNode* root() { return root_.get(); }
     const OctreeNode* root() const { return root_.get(); }
+
+    const OctreeNode* locate(const Vec3& p) const {
+        const OctreeNode* node = root_.get();
+        while (node && !node->terminal()) {
+            const Vec3 center = node->bounds.center();
+            std::uint8_t code = 0;
+            if (p.x >= center.x) code |= OctreeNode::X;
+            if (p.y >= center.y) code |= OctreeNode::Y;
+            if (p.z >= center.z) code |= OctreeNode::Z;
+            node = node->children[code].get();
+            if (node == nullptr) break;
+        }
+        return node;
+    }
+
     void insert(const Triangle& triangle) { insertTriangle(root_.get(), triangle); }
     void insert(const std::vector<Triangle>& triangles) { for (const auto& t : triangles) insert(t); }
 
@@ -238,3 +279,72 @@ private:
 };
 
 } // namespace openu
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
