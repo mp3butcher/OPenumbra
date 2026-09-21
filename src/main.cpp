@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
-#include <vector>
 #include "openu/Octree.hpp"
+#include "openu/OctreeRasterizer.hpp"
 
 using namespace openu;
 
@@ -14,15 +14,15 @@ int main() {
     assert(!leaves.empty());
     assert(tree.occupiedLeafCount() > 0);
 
-    // The lookup is parent/Morton based; it does not perform a global leaf scan.
-    const OctreeNode* leaf = leaves.front();
-    const OctreeNode* positiveX = leaf->getNeighbor(Axis::X, Direction::Positive);
-    if (positiveX) {
-        std::vector<OctreeNode*> all;
-        leaf->getNeighbors(Axis::X, Direction::Positive, all);
-        assert(!all.empty());
-    }
+    ViewPoint view{};
+    // Identity clip transform is sufficient for the smoke test; real callers
+    // should supply their camera's world-to-clip matrix.
+    view.worldToClip[0] = view.worldToClip[5] = view.worldToClip[10] = view.worldToClip[15] = 1.0f;
+    OctreeRasterizer rasterizer(256, 256);
+    const RasterizedOctree frame = rasterizer.rasterize(tree, view);
+    assert(frame.depth.size() == 256u * 256u);
 
-    std::cout << "leaves=" << leaves.size() << " occupied=" << tree.occupiedLeafCount() << '\n';
+    std::cout << "leaves=" << leaves.size() << " occupied=" << tree.occupiedLeafCount()
+              << " visible_empty=" << frame.visibleEmptyLeaves.size() << '\n';
     return 0;
 }
