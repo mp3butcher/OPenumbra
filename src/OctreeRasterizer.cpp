@@ -56,7 +56,7 @@ bool projectBounds(const AABB& box, const ViewPoint& view, float& xmin, float& y
 OctreeRasterizer::OctreeRasterizer(unsigned width, unsigned height) : moc_(nullptr), width_(width), height_(height) {
     if (width == 0 || height == 0 || width % 8 != 0 || height % 4 != 0)
         throw std::invalid_argument("MaskedOcclusionCulling resolution must be width % 8 == 0 and height % 4 == 0");
-    moc_ = MaskedOcclusionCulling::Create();
+    moc_ = MaskedOcclusionCulling::Create(MaskedOcclusionCulling::SSE2);
     moc_->SetResolution(width_, height_);
 }
 
