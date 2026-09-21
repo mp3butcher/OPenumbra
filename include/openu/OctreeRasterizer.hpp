@@ -30,7 +30,7 @@ public:
 
     // Occupied leaf AABBs are rendered as conservative occluders. Empty leaves
     // are then tested against the resulting hierarchical depth buffer.
-    RasterizedOctree rasterize(const OcclusionOctree& tree, const ViewPoint& view);
+    RasterizedOctree rasterize(OcclusionOctree& tree, const ViewPoint& view);
 
 private:
     MaskedOcclusionCulling* moc_;

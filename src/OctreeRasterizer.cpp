@@ -62,12 +62,12 @@ OctreeRasterizer::OctreeRasterizer(unsigned width, unsigned height) : moc_(nullp
 
 OctreeRasterizer::~OctreeRasterizer() { if (moc_) MaskedOcclusionCulling::Destroy(moc_); }
 
-RasterizedOctree OctreeRasterizer::rasterize(const OcclusionOctree& tree, const ViewPoint& view) {
+RasterizedOctree OctreeRasterizer::rasterize(OcclusionOctree& tree, const ViewPoint& view) {
     RasterizedOctree result;
     result.width = width_; result.height = height_;
     moc_->ClearBuffer();
 
-    std::vector<const OctreeNode*> leaves;
+    std::vector<OctreeNode*> leaves;
     tree.leaves(leaves);
     std::vector<ClipVertex> vertices;
     vertices.reserve(8);
