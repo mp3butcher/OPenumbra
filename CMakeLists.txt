@@ -19,32 +19,12 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(MaskedOcclusionCulling)
 if (UNIX AND NOT APPLE)
  target_compile_options(MaskedOcclusionCulling PRIVATE -mxsave)
-    
- 
-    file(READ
-        "${maskedocclusionculling_SOURCE_DIR}/CompilerSpecific.inl"
-        MOC_COMPILER_SPECIFIC
-    )
-
-
-        string(REPLACE
-        "FORCE_INLINE void __cpuidex(int* cpuinfo, int function, int subfunction)\n\t{\n\t\t__cpuid_count(function, subfunction, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);\n\t}\n\n"
-        ""
-        MOC_COMPILER_SPECIFIC
-        "${MOC_COMPILER_SPECIFIC}"
-    )
-    string(REPLACE
-        "FORCE_INLINE unsigned long long _xgetbv(unsigned int index)\n\t{\n\t\tunsigned int eax, edx;\n\t\t__asm__ __volatile__(\n\t\t\t\"xgetbv;\"\n\t\t\t: \"=a\" (eax), \"=d\"(edx)\n\t\t\t: \"c\" (index)\n\t\t);\n\t\treturn ((unsigned long long)edx << 32) | eax;\n\t}"
-  ""
-        MOC_COMPILER_SPECIFIC
-        "${MOC_COMPILER_SPECIFIC}"
-    )
-     
-    file(WRITE
-        "${maskedocclusionculling_SOURCE_DIR}/CompilerSpecific.inl"
-        "${MOC_COMPILER_SPECIFIC}"
-    )
+    file(READ "${maskedocclusionculling_SOURCE_DIR}/CompilerSpecific.inl" MOC_COMPILER_SPECIFIC)
+    string(REPLACE "FORCE_INLINE void __cpuidex(int* cpuinfo, int function, int subfunction)\n\t{\n\t\t__cpuid_count(function, subfunction, cpuinfo[0], cpuinfo[1], cpuinfo[2], cpuinfo[3]);\n\t}\n\n" "" MOC_COMPILER_SPECIFIC "${MOC_COMPILER_SPECIFIC}")
+    string(REPLACE "FORCE_INLINE unsigned long long _xgetbv(unsigned int index)\n\t{\n\t\tunsigned int eax, edx;\n\t\t__asm__ __volatile__(\n\t\t\t\"xgetbv;\"\n\t\t\t: \"=a\" (eax), \"=d\"(edx)\n\t\t\t: \"c\" (index)\n\t\t);\n\t\treturn ((unsigned long long)edx << 32) | eax;\n\t}\n\n" "" MOC_COMPILER_SPECIFIC "${MOC_COMPILER_SPECIFIC}")
+    file(WRITE "${maskedocclusionculling_SOURCE_DIR}/CompilerSpecific.inl" "${MOC_COMPILER_SPECIFIC}")
 endif()
+
 add_library(openu STATIC src/OctreeRasterizer.cpp)
 target_include_directories(openu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(openu PUBLIC MaskedOcclusionCulling)
@@ -52,5 +32,9 @@ target_link_libraries(openu PUBLIC MaskedOcclusionCulling)
 add_executable(openumbra_octree_demo src/main.cpp)
 target_link_libraries(openumbra_octree_demo PRIVATE openu)
 
+add_executable(openu_octree_rasterizer_test tests/OctreeRasterizerTest.cpp)
+target_link_libraries(openu_octree_rasterizer_test PRIVATE openu)
+
 enable_testing()
 add_test(NAME openumbra_octree_demo COMMAND openumbra_octree_demo)
+add_test(NAME openu_octree_rasterizer COMMAND openu_octree_rasterizer_test)
