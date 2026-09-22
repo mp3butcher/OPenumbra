@@ -17,7 +17,9 @@ int main() {
     ViewPoint view{};
     // Identity clip transform is sufficient for the smoke test; real callers
     // should supply their camera's world-to-clip matrix.
-    view.worldToClip[0] = view.worldToClip[5] = view.worldToClip[10] = view.worldToClip[15] = 1.0f;
+    view.view.m[0] = view.view.m[5] = view.view.m[10] = view.view.m[15] = 1.0f;
+    view.projection.m[0] = view.projection.m[5] = view.projection.m[10] = view.projection.m[15] = 1.0f;
+  
     OctreeRasterizer rasterizer(256, 256);
     const RasterizedOctree frame = rasterizer.rasterize(tree, view);
     assert(frame.depth.size() == 256u * 256u);
