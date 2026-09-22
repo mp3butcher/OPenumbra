@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "MaskedOcclusionCulling.h"
-
+#include <iostream>
 namespace openu {
 namespace {
 struct ClipVertex { float x, y, z, w; };
@@ -85,9 +85,9 @@ std::vector<const OctreeNode*> OctreeRasterizer::visibleCells(const OcclusionOct
         if (!node->occupied) visible.push_back(node);
         for (Axis axis : {Axis::X, Axis::Y, Axis::Z}) {
             for (Direction dir : {Direction::Negative, Direction::Positive}) {
-                std::vector<OctreeNode*> neighbors;
+                std::vector<const OctreeNode*> neighbors;
                 node->getNeighbors(axis, dir, neighbors);
-                for (OctreeNode* neighbor : neighbors) {
+                for (const OctreeNode* neighbor : neighbors) {
                     if (neighbor && !visited.count(neighbor) && aabbIntersectsFrustum(neighbor->bounds, clip)) frontier.push_back(neighbor);
                 }
             }
@@ -117,7 +117,8 @@ std::vector<const OctreeNode*> OctreeRasterizer::visibleCells(const CompiledOctr
         if (n.source && n.bounds.contains(view.cameraPosition())) { start = id; sourceStart = n.source; break; }
     }
     (void)sourceStart;
-    if (start == InvalidNode) return visible;
+    if (start == InvalidNode)
+        return visible;
 
     frontier_.clear();
     frontier_.push_back(start);
@@ -128,12 +129,12 @@ std::vector<const OctreeNode*> OctreeRasterizer::visibleCells(const CompiledOctr
         visitStamp_[id] = traversalStamp_;
         const CompiledNode& node = tree.node(id);
         if (!node.occupied) visible.push_back(node.source);
-
         for (std::size_t face = 0; face < 6; ++face) {
             const std::uint32_t begin = node.neighborBegin[face];
             const std::uint32_t end = begin + node.neighborCount[face];
             const auto& neighbors = tree.neighborStorage();
             for (std::uint32_t i = begin; i < end; ++i) {
+                //std::cout<<i<<" chek neighbor node" <<std::endl;
                 const NodeId neighbor = neighbors[i];
                 if (neighbor == InvalidNode || visitStamp_[neighbor] == traversalStamp_) continue;
                 if (aabbIntersectsFrustum(tree.node(neighbor).bounds, clip)) frontier_.push_back(neighbor);
@@ -151,9 +152,12 @@ RasterizedOctree OctreeRasterizer::rasterizeNodes(const std::vector<const Octree
     std::array<ClipVertex, 8> vertices{};
 
     for (const OctreeNode* node : nodes) {
+
+        std::cerr<<" check drawing node"<<std::endl;
         if (!node || !node->occupied) continue;
         const auto points = corners(node->bounds);
         for (std::size_t i = 0; i < points.size(); ++i) vertices[i] = transform(points[i], clip);
+        std::cerr<<" drawing node"<<std::endl;
         moc_->RenderTriangles(reinterpret_cast<const float*>(vertices.data()), boxIndices, 12, nullptr,
                               MaskedOcclusionCulling::BACKFACE_NONE, MaskedOcclusionCulling::CLIP_PLANE_ALL);
     }

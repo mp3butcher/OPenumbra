@@ -17,10 +17,11 @@ struct ViewPoint {
         const float tx = view.m[3];
         const float ty = view.m[7];
         const float tz = view.m[11];
+    
         return {
-            -(view.m[0] * tx + view.m[1] * ty + view.m[2] * tz),
-            -(view.m[4] * tx + view.m[5] * ty + view.m[6] * tz),
-            -(view.m[8] * tx + view.m[9] * ty + view.m[10] * tz)
+            -(view.m[0] * tx + view.m[4] * ty + view.m[8]  * tz),
+            -(view.m[1] * tx + view.m[5] * ty + view.m[9]  * tz),
+            -(view.m[2] * tx + view.m[6] * ty + view.m[10] * tz)
         };
     }
 };

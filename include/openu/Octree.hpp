@@ -167,7 +167,7 @@ struct OctreeNode {
         return result;
     }
 
-    void getNeighbors(Axis axis, Direction direction, std::vector<OctreeNode*>& out) const {
+    void getNeighbors(Axis axis, Direction direction, std::vector<const OctreeNode*>& out) const {
         const ChildCode bit = mask(axis);
         const bool positive = direction == Direction::Positive;
         const OctreeNode* pivot = this;
@@ -193,7 +193,7 @@ struct OctreeNode {
 
 private:
     static void collectFaceLeaves(OctreeNode* node, Axis axis, bool positiveFromSource,
-                                 std::vector<OctreeNode*>& out) {
+                                 std::vector<const OctreeNode*>& out) {
         if (node->terminal()) { out.push_back(node); return; }
         const ChildCode bit = mask(axis);
         const ChildCode face = positiveFromSource ? 0 : bit;
@@ -238,7 +238,7 @@ public:
 
     std::size_t occupiedLeafCount() const { return countOccupied(root_.get()); }
 
-    CompiledOctree compile() const;
+    CompiledOctree* compile() const;
 
 private:
     static AABB childBounds(const AABB& b, std::uint8_t code) {
@@ -309,7 +309,7 @@ public:
     CompiledOctree(const CompiledOctree&) = delete;
     CompiledOctree& operator=(const CompiledOctree&) = delete;
 
-    static CompiledOctree build(const OcclusionOctree& tree);
+    static CompiledOctree* build(const OcclusionOctree& tree);
 
     std::size_t nodeCount() const { return nodes_.size(); }
     const CompiledNode& node(NodeId id) const { return nodes_.at(id); }
@@ -337,8 +337,9 @@ private:
     std::vector<NodeId> neighborStorage_;
 };
 
-inline CompiledOctree CompiledOctree::build(const OcclusionOctree& tree) {
-    CompiledOctree out;
+inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
+    CompiledOctree *outp = new CompiledOctree();
+    CompiledOctree &out = *outp;
     std::vector<const OctreeNode*> leaves;
     tree.root()->getNeighbors(Axis::X, Direction::Positive, leaves);
     // Intentionally keep the compile path simple and deterministic: gather the
@@ -380,9 +381,9 @@ inline CompiledOctree CompiledOctree::build(const OcclusionOctree& tree) {
             std::make_pair(Axis::Z, Direction::Positive)
         };
         for (std::size_t f = 0; f < faces.size(); ++f) {
-            std::vector<OctreeNode*> neighbors;
+            std::vector<const OctreeNode*> neighbors;
             leaf->getNeighbors(faces[f].first, faces[f].second, neighbors);
-            for (OctreeNode* neighbor : neighbors) {
+            for (const OctreeNode* neighbor : neighbors) {
                 if (!neighbor) continue;
                 auto it = std::find(allLeaves.begin(), allLeaves.end(), neighbor);
                 if (it == allLeaves.end()) continue;
@@ -404,10 +405,10 @@ inline CompiledOctree CompiledOctree::build(const OcclusionOctree& tree) {
         }
     }
 
-    return out;
+    return outp;
 }
 
-inline CompiledOctree OcclusionOctree::compile() const {
+inline CompiledOctree * OcclusionOctree::compile() const {
     return CompiledOctree::build(*this);
 }
 
