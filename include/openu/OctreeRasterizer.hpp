@@ -17,10 +17,6 @@ struct ViewPoint {
         const float tx = view.m[3];
         const float ty = view.m[7];
         const float tz = view.m[11];
-
-        // Row-major world-to-camera matrix; camera space is camera's local space.
-        // For a rigid camera transform, the world-space camera position is the
-        // negative of the rotation-transformed translation.
         return {
             -(view.m[0] * tx + view.m[1] * ty + view.m[2] * tz),
             -(view.m[4] * tx + view.m[5] * ty + view.m[6] * tz),
@@ -44,13 +40,24 @@ public:
     OctreeRasterizer(const OctreeRasterizer&) = delete;
     OctreeRasterizer& operator=(const OctreeRasterizer&) = delete;
 
+    // Compatibility path. Prefer the CompiledOctree overload for repeated POVs.
     std::vector<const OctreeNode*> visibleCells(const OcclusionOctree& tree, const ViewPoint& view) const;
     RasterizedOctree rasterize(OcclusionOctree& tree, const ViewPoint& view);
 
+    // Traversal over precomputed integer neighbor ranges. The CompiledOctree
+    // must outlive the returned pointers and must not be rebuilt after use.
+    std::vector<const OctreeNode*> visibleCells(const CompiledOctree& tree, const ViewPoint& view) const;
+    RasterizedOctree rasterize(const CompiledOctree& tree, const ViewPoint& view);
+
 private:
+    RasterizedOctree rasterizeNodes(const std::vector<const OctreeNode*>& nodes, const ViewPoint& view);
+
     MaskedOcclusionCulling* moc_;
     unsigned width_;
     unsigned height_;
+    mutable std::vector<std::uint32_t> visitStamp_;
+    mutable std::uint32_t traversalStamp_ = 0;
+    mutable std::vector<NodeId> frontier_;
 };
 
 } // namespace openu
