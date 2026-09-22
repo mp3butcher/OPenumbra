@@ -113,6 +113,15 @@ struct AABB {
 enum class Axis : std::uint8_t { X, Y, Z };
 enum class Direction : std::uint8_t { Negative, Positive };
 
+enum class Face : std::uint8_t {
+    NegX,
+    PosX,
+    NegY,
+    PosY,
+    NegZ,
+    PosZ
+};
+
 struct OctreeNode {
     using ChildCode = std::uint8_t;
     static constexpr ChildCode X = 1u;
@@ -194,6 +203,8 @@ private:
     }
 };
 
+class CompiledOctree;
+
 class OcclusionOctree {
 public:
     OcclusionOctree(AABB bounds, std::size_t maxDepth = 8, std::size_t maxTrianglesPerCell = 1)
@@ -226,6 +237,8 @@ public:
     std::vector<OctreeNode*> leaves() { std::vector<OctreeNode*> out; leaves(out); return out; }
 
     std::size_t occupiedLeafCount() const { return countOccupied(root_.get()); }
+
+    CompiledOctree compile() const;
 
 private:
     static AABB childBounds(const AABB& b, std::uint8_t code) {
@@ -277,5 +290,125 @@ private:
     std::size_t maxDepth_;
     std::size_t maxTrianglesPerCell_;
 };
+
+using NodeId = std::uint32_t;
+static constexpr NodeId InvalidNode = std::numeric_limits<NodeId>::max();
+
+struct CompiledNode {
+    AABB bounds{};
+    std::array<NodeId, 8> children{};
+    std::array<std::uint32_t, 6> neighborBegin{};
+    std::array<std::uint16_t, 6> neighborCount{};
+    bool occupied = false;
+    const OctreeNode* source = nullptr;
+};
+
+class CompiledOctree {
+public:
+    CompiledOctree() = default;
+    CompiledOctree(const CompiledOctree&) = delete;
+    CompiledOctree& operator=(const CompiledOctree&) = delete;
+
+    static CompiledOctree build(const OcclusionOctree& tree);
+
+    std::size_t nodeCount() const { return nodes_.size(); }
+    const CompiledNode& node(NodeId id) const { return nodes_.at(id); }
+    const std::vector<NodeId>& neighborStorage() const { return neighborStorage_; }
+
+    NodeId locate(const Vec3& point) const {
+        if (nodes_.empty()) return InvalidNode;
+        NodeId current = 0;
+        while (current < nodes_.size()) {
+            const CompiledNode& node = nodes_[current];
+            if (node.children[0] == InvalidNode) return current;
+            const Vec3 center = node.bounds.center();
+            std::uint8_t code = 0;
+            if (point.x >= center.x) code |= 1u;
+            if (point.y >= center.y) code |= 2u;
+            if (point.z >= center.z) code |= 4u;
+            current = node.children[code];
+            if (current == InvalidNode) return InvalidNode;
+        }
+        return InvalidNode;
+    }
+
+private:
+    std::vector<CompiledNode> nodes_;
+    std::vector<NodeId> neighborStorage_;
+};
+
+inline CompiledOctree CompiledOctree::build(const OcclusionOctree& tree) {
+    CompiledOctree out;
+    std::vector<const OctreeNode*> leaves;
+    tree.root()->getNeighbors(Axis::X, Direction::Positive, leaves);
+    // Intentionally keep the compile path simple and deterministic: gather the
+    // terminal cells in-tree and assign contiguous IDs to them.
+    std::vector<const OctreeNode*> allLeaves;
+    std::vector<const OctreeNode*> pending;
+    pending.push_back(tree.root());
+    while (!pending.empty()) {
+        const OctreeNode* node = pending.back();
+        pending.pop_back();
+        if (!node) continue;
+        if (node->terminal()) {
+            allLeaves.push_back(node);
+            continue;
+        }
+        for (auto& child : node->children) pending.push_back(child.get());
+    }
+
+    out.nodes_.resize(allLeaves.size());
+    for (std::size_t i = 0; i < allLeaves.size(); ++i) {
+        out.nodes_[i].bounds = allLeaves[i]->bounds;
+        out.nodes_[i].occupied = allLeaves[i]->occupied;
+        out.nodes_[i].source = allLeaves[i];
+        for (auto& child : out.nodes_[i].children) child = InvalidNode;
+    }
+
+    // Precompute a simple, conservative face-neighbor adjacency by reusing the
+    // adaptive neighbor logic while compiling. This is O(N * faces), but the cost
+    // is paid once at compile time, not every frame.
+    std::vector<std::vector<NodeId>> faceNeighbors(allLeaves.size() * 6);
+    for (std::size_t i = 0; i < allLeaves.size(); ++i) {
+        const OctreeNode* leaf = allLeaves[i];
+        const std::array<std::pair<Axis, Direction>, 6> faces = {
+            std::make_pair(Axis::X, Direction::Negative),
+            std::make_pair(Axis::X, Direction::Positive),
+            std::make_pair(Axis::Y, Direction::Negative),
+            std::make_pair(Axis::Y, Direction::Positive),
+            std::make_pair(Axis::Z, Direction::Negative),
+            std::make_pair(Axis::Z, Direction::Positive)
+        };
+        for (std::size_t f = 0; f < faces.size(); ++f) {
+            std::vector<OctreeNode*> neighbors;
+            leaf->getNeighbors(faces[f].first, faces[f].second, neighbors);
+            for (OctreeNode* neighbor : neighbors) {
+                if (!neighbor) continue;
+                auto it = std::find(allLeaves.begin(), allLeaves.end(), neighbor);
+                if (it == allLeaves.end()) continue;
+                faceNeighbors[i * 6 + f].push_back(static_cast<NodeId>(std::distance(allLeaves.begin(), it)));
+            }
+        }
+    }
+
+    std::size_t totalNeighbors = 0;
+    for (auto& v : faceNeighbors) totalNeighbors += v.size();
+    out.neighborStorage_.reserve(totalNeighbors);
+    for (std::size_t i = 0; i < allLeaves.size(); ++i) {
+        for (std::size_t f = 0; f < 6; ++f) {
+            out.nodes_[i].neighborBegin[f] = static_cast<std::uint32_t>(out.neighborStorage_.size());
+            out.nodes_[i].neighborCount[f] = static_cast<std::uint16_t>(faceNeighbors[i * 6 + f].size());
+            out.neighborStorage_.insert(out.neighborStorage_.end(),
+                                       faceNeighbors[i * 6 + f].begin(),
+                                       faceNeighbors[i * 6 + f].end());
+        }
+    }
+
+    return out;
+}
+
+inline CompiledOctree OcclusionOctree::compile() const {
+    return CompiledOctree::build(*this);
+}
 
 } // namespace openu
