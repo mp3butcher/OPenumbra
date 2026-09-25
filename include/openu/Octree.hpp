@@ -8,7 +8,7 @@
 #include <limits>
 #include <memory>
 #include <vector>
-
+#include <fstream>
 namespace openu {
 
 struct Vec3 {
@@ -134,7 +134,7 @@ struct OctreeNode {
     ChildCode localMorton = 0; // bit 0 X, bit 1 Y, bit 2 Z
     std::uint32_t depth = 0;
     bool occupied = false;
-    std::vector<Triangle> triangles;
+    //std::vector<Triangle> triangles;
 
     bool terminal() const { return children[0] == nullptr; }
     static ChildCode mask(Axis axis) { return axis == Axis::X ? X : axis == Axis::Y ? Y : Z; }
@@ -171,34 +171,52 @@ struct OctreeNode {
         const ChildCode bit = mask(axis);
         const bool positive = direction == Direction::Positive;
         const OctreeNode* pivot = this;
+
+        // 1. Remontée pour trouver l'ancêtre commun (Pivot)
         while (pivot->parent != nullptr) {
-            if (((pivot->localMorton & bit) != 0) != positive) break;
+            const bool onPositiveSide = (pivot->localMorton & bit) != 0;
+            if (onPositiveSide != positive) break;
             pivot = pivot->parent;
         }
-        if (pivot->parent == nullptr) return;
+        if (pivot->parent == nullptr) return; // Pas de voisin (bord de l'octree)
 
-        OctreeNode* candidate = pivot->parent->children[pivot->localMorton ^ bit].get();
-        if (!candidate) return;
+        // 2. Passage à la branche voisine au niveau du pivot
+        OctreeNode* neighborBranch = pivot->parent->children[pivot->localMorton ^ bit].get();
+        if (!neighborBranch) return;
+
+        // 3. Descente vers le niveau équivalent à "this"
         std::vector<ChildCode> suffix;
         for (const OctreeNode* n = this; n != pivot; n = n->parent) suffix.push_back(n->localMorton);
         std::reverse(suffix.begin(), suffix.end());
+
+        OctreeNode* result = neighborBranch;
         for (ChildCode code : suffix) {
-            if (candidate->terminal()) break;
+            if (result->terminal()) break;
             const ChildCode next = static_cast<ChildCode>((code & ~bit) | (positive ? 0 : bit));
-            if (!candidate->children[next]) break;
-            candidate = candidate->children[next].get();
+            if (!result->children[next]) break;
+            result = result->children[next].get();
         }
-        collectFaceLeaves(candidate, axis, positive, out);
+
+        // 4. Collecte de tous les sous-voisins (si le voisin est plus subdivisé)
+        // La face adjacente correspond aux enfants qui ont (localMorton & bit) == (positive ? 0 : bit)
+        const ChildCode targetTargetBitValue = positive ? 0 : bit;
+        collectLeavesFacing(result, bit, targetTargetBitValue, out);
     }
 
 private:
-    static void collectFaceLeaves(OctreeNode* node, Axis axis, bool positiveFromSource,
-                                 std::vector<const OctreeNode*>& out) {
-        if (node->terminal()) { out.push_back(node); return; }
-        const ChildCode bit = mask(axis);
-        const ChildCode face = positiveFromSource ? 0 : bit;
-        for (std::uint8_t i = 0; i < 8; ++i) {
-            if ((i & bit) == face) collectFaceLeaves(node->children[i].get(), axis, positiveFromSource, out);
+    static void collectLeavesFacing(const OctreeNode* node, ChildCode bit, ChildCode targetValue, std::vector<const OctreeNode*>& out) {
+        if (!node) return;
+        
+        if (node->terminal()) {
+            out.push_back(node);
+            return;
+        }
+
+        // On ne descend que dans les enfants qui touchent la face du nœud d'origine
+        for (size_t i = 0; i < 8; ++i) {
+            if (node->children[i] && ((static_cast<ChildCode>(i) & bit) == targetValue)) {
+                collectLeavesFacing(node->children[i].get(), bit, targetValue, out);
+            }
         }
     }
 };
@@ -208,7 +226,7 @@ class CompiledOctree;
 class OcclusionOctree {
 public:
     OcclusionOctree(AABB bounds, std::size_t maxDepth = 8, std::size_t maxTrianglesPerCell = 1)
-        : maxDepth_(maxDepth), maxTrianglesPerCell_(std::max<std::size_t>(1, maxTrianglesPerCell)) {
+        : maxDepth_(maxDepth), maxTrianglesPerCell_(std::max<std::size_t>(0, maxTrianglesPerCell)) {
         root_ = std::make_unique<OctreeNode>();
         root_->bounds = bounds;
     }
@@ -250,24 +268,22 @@ private:
     void insertTriangle(OctreeNode* node, const Triangle& triangle) {
         if (!node->bounds.intersectsTriangle(triangle)) return;
         if (node->terminal()) {
-            node->triangles.push_back(triangle);
             node->occupied = true;
-            if (node->depth < maxDepth_ && node->triangles.size() > maxTrianglesPerCell_) subdivide(node);
+            if (node->depth < maxDepth_ ) subdivide(node ,triangle);
             return;
         }
         for (auto& child : node->children) insertTriangle(child.get(), triangle);
         refreshOccupied(node);
     }
 
-    void subdivide(OctreeNode* node) {
-        const auto old = std::move(node->triangles);
+    void subdivide(OctreeNode* node,const Triangle& triangle) {
         for (std::uint8_t i = 0; i < 8; ++i) {
             auto child = std::make_unique<OctreeNode>();
             child->parent = node; child->localMorton = i; child->depth = node->depth + 1;
             child->bounds = childBounds(node->bounds, i);
             node->children[i] = std::move(child);
         }
-        for (const auto& triangle : old) for (auto& child : node->children) insertTriangle(child.get(), triangle);
+        for (auto& child : node->children) insertTriangle(child.get(), triangle);
         refreshOccupied(node);
     }
 
@@ -300,11 +316,12 @@ struct CompiledNode {
     std::array<std::uint32_t, 6> neighborBegin{};
     std::array<std::uint16_t, 6> neighborCount{};
     bool occupied = false;
-    const OctreeNode* source = nullptr;
 };
 
 class CompiledOctree {
 public:
+
+friend class CompiledOctreeSerializer;
     CompiledOctree() = default;
     CompiledOctree(const CompiledOctree&) = delete;
     CompiledOctree& operator=(const CompiledOctree&) = delete;
@@ -362,7 +379,6 @@ inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
     for (std::size_t i = 0; i < allLeaves.size(); ++i) {
         out.nodes_[i].bounds = allLeaves[i]->bounds;
         out.nodes_[i].occupied = allLeaves[i]->occupied;
-        out.nodes_[i].source = allLeaves[i];
         for (auto& child : out.nodes_[i].children) child = InvalidNode;
     }
 
@@ -412,4 +428,94 @@ inline CompiledOctree * OcclusionOctree::compile() const {
     return CompiledOctree::build(*this);
 }
 
+
+
+class CompiledOctreeSerializer {
+    private:
+        static constexpr std::uint32_t MagicHeader = 0x3854434F; // "OCT8" in ASCII
+        static constexpr std::uint32_t FormatVersion = 1;
+    
+        // // This internal struct mirrors CompiledNode but excludes the runtime source pointer
+        // // to ensure perfectly predictable binary layout and padding on disk.
+        // struct DiskNode {
+        //     AABB bounds;
+        //     std::array<NodeId, 8> children;
+        //     std::array<std::uint32_t, 6> neighborBegin;
+        //     std::array<std::uint16_t, 6> neighborCount;
+        //     bool occupied;
+        // };
+    
+    public:
+        // Writes the octree to a binary file
+        static bool saveToFile(const CompiledOctree& octree, const std::string& filepath) {
+            std::ofstream out(filepath, std::ios::binary);
+            if (!out.is_open()) return false;
+    
+            // 1. Write Header
+            out.write(reinterpret_cast<const char*>(&MagicHeader), sizeof(MagicHeader));
+            out.write(reinterpret_cast<const char*>(&FormatVersion), sizeof(FormatVersion));
+    
+            // 2. Write Metadata (Sizes)
+            std::uint64_t nodeCount = octree.nodeCount();
+            std::uint64_t storageSize = octree.neighborStorage().size();
+            out.write(reinterpret_cast<const char*>(&nodeCount), sizeof(nodeCount));
+            out.write(reinterpret_cast<const char*>(&storageSize), sizeof(storageSize));
+    
+            // 3. Write Nodes (skipping runtime pointers)
+            for (std::size_t i = 0; i < nodeCount; ++i) {
+                const auto& node = octree.node(static_cast<NodeId>(i));               
+                out.write(reinterpret_cast<const char*>(&node), sizeof(CompiledNode));
+            }
+    
+            // 4. Write Neighbor Storage
+            if (storageSize > 0) {
+                out.write(reinterpret_cast<const char*>(octree.neighborStorage().data()), 
+                          storageSize * sizeof(NodeId));
+            }
+    
+            return out.good();
+        }
+    
+        // Loads the octree from a binary file into an existing instance
+        // Note: Requires modifying CompiledOctree or adding a friendship to allow data population.
+        static bool loadFromFile(CompiledOctree& octree, const std::string& filepath) {
+            std::ifstream in(filepath, std::ios::binary);
+            if (!in.is_open()) return false;
+    
+            // 1. Read and verify Header
+            std::uint32_t magic = 0;
+            std::uint32_t version = 0;
+            in.read(reinterpret_cast<char*>(&magic), sizeof(magic));
+            in.read(reinterpret_cast<char*>(&version), sizeof(version));
+    
+            if (magic != MagicHeader || version != FormatVersion) {
+                return false; // Invalid file format or version mismatch
+            }
+    
+            // 2. Read Metadata
+            std::uint64_t nodeCount = 0;
+            std::uint64_t storageSize = 0;
+            in.read(reinterpret_cast<char*>(&nodeCount), sizeof(nodeCount));
+            in.read(reinterpret_cast<char*>(&storageSize), sizeof(storageSize));
+    
+            // 3. Access internal vectors (Assumes Serializer is a 'friend' class of CompiledOctree)
+            octree.nodes_.resize(nodeCount);
+            octree.neighborStorage_.resize(storageSize);
+    
+            // 4. Read and reconstruct Nodes
+            for (std::size_t i = 0; i < nodeCount; ++i) {                
+                auto& node = octree.nodes_[i];
+                in.read(reinterpret_cast<char*>(&node), sizeof(CompiledNode));
+            }
+    
+            // 5. Read Neighbor Storage
+            if (storageSize > 0) {
+                in.read(reinterpret_cast<char*>(octree.neighborStorage_.data()), 
+                        storageSize * sizeof(NodeId));
+            }
+    
+            return in.good();
+        }
+    };
+    
 } // namespace openu

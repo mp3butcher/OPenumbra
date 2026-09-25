@@ -140,115 +140,36 @@ ViewPoint makeViewFromProjView(const float legacy[16],const float viewmatrix[16]
     view.view.m[12] = viewmatrix[12]; view.view.m[13] = viewmatrix[13]; view.view.m[14] = viewmatrix[14]; view.view.m[15] = viewmatrix[15];
     return view;
 }
-void testCompiledTraversal() {
+void testCompiledSerialization() {
 
-//     std::cerr<<" create octree"<<std::endl;
-//     OcclusionOctree tree({{-10, -10, -10}, {10, 10, 10}},8, 0);
-//       tree.insert(Triangle{{-1.8f, -8.8f, -5.2f}, {.8f, -8.8f, -5.2f}, {0, 8.8f, -10.2f}});
-//    tree.insert(Triangle{{5.7f, 1.7f, -1.3f}, {.7f, 7.7f, -1.3f}, {0, -8.7f, -1.3f}});
-//   //  tree.insert(Triangle{{15.7f, -10.7f, -1.3f}, {.7f, -70.7f, 1.3f}, {0, -8.7f, 10.3f}});
+    std::cerr<<" create octree"<<std::endl;
+    OcclusionOctree tree({{-10, -10, -10}, {10, 10, 10}},8, 0);
+      tree.insert(Triangle{{-1.8f, -8.8f, -5.2f}, {.8f, -8.8f, -5.2f}, {0, 8.8f, -10.2f}});
+   tree.insert(Triangle{{5.7f, 1.7f, -1.3f}, {.7f, 7.7f, -1.3f}, {0, -8.7f, -1.3f}});
+  //  tree.insert(Triangle{{15.7f, -10.7f, -1.3f}, {.7f, -70.7f, 1.3f}, {0, -8.7f, 10.3f}});
 
-//   std::vector<Triangle> tris;
-//    tree.insert(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
-//   tree.insert(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
+  std::vector<Triangle> tris;
+   tree.insert(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
+  tree.insert(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
 
-//    tris.push_back(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
-//    tris.push_back(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
-//     std::cerr<<tree.leaves().size()<<std::endl;
+   tris.push_back(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
+   tris.push_back(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
+    std::cerr<<tree.leaves().size()<<std::endl;
 
-//     std::cerr<<" compiling octree"<<std::endl;
-//     CompiledOctree &compiled = *tree.compile();
+    std::cerr<<" compiling octree"<<std::endl;
+    CompiledOctree &compiled = *tree.compile();
 
-//     std::cerr<<" compiled octree"<<std::endl;
-//     assert(compiled.nodeCount() == tree.leaves().size());
-//     assert(compiled.locate({-0.080155, 0.07, 0.0656662}) != InvalidNode);
+    std::cerr<<" compiled octree"<<std::endl;
+    assert(compiled.nodeCount() == tree.leaves().size());
+    assert(compiled.locate({-0.080155, 0.07, 0.0656662}) != InvalidNode);
 
 CompiledOctreeSerializer ser;
-CompiledOctree compiled;
-ser.loadFromFile(compiled,"octrecompiled.db");
+ser.saveToFile(compiled,"octrecompiled.db");
 
-    OctreeRasterizer rasterizer(256, 256);
-    MaskedOcclusionCulling *moc_ = MaskedOcclusionCulling::Create();	
-    MaskedOcclusionCulling::Implementation implementation = moc_->GetImplementation();
-	switch (implementation) {
-	case MaskedOcclusionCulling::SSE2: printf("Using SSE2 version\n"); break;
-	case MaskedOcclusionCulling::SSE41: printf("Using SSE41 version\n"); break;
-	case MaskedOcclusionCulling::AVX2: printf("Using AVX2 version\n"); break;
-	case MaskedOcclusionCulling::AVX512: printf("Using AVX-512 version\n"); break;
-	}
-    moc_->SetResolution(256, 256);
-  /*   const float projection[16] = {
-        2.98564, 0, 0, 0,
-        0, -3.73205, 0, 0,
-        0, 0, 9.52472e-05, 0.0415094,
-        0, 0, -1, 0
-    };
-    const float viewmat[16] = {
-        1, 0, 0, 0.080155,
-        0, 0, 1, 0.0656662,
-        0, -1, 0, -99.07,
-        0, 0, 0, 1
-    };*/
-   const float projection[16] = {
-        2.414, 0, 0, 0,
-        0, 2.414, 0, 0,
-        0, 0, -1.02, -0.202,
-        0, 0, -1, 0
-    };
-    const float viewmat[16] = {
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1
-    };
-    const ViewPoint view = makeViewFromProjView(projection,viewmat);
+CompiledOctree compiledread;
+ser.loadFromFile(compiledread,"octrecompiled.db");
+assert(compiled.nodeCount() == compiledread.nodeCount());
 
-    const auto first = rasterizer.visibleCells(compiled, view);
-    const auto second = rasterizer.visibleCells(compiled, view);
-    assert(first.size() == second.size());
-    assert(!first.empty());
-
-    std::cout<<first.size()<<" visible nodes" <<std::endl;
-
-     RasterizedOctree result = rasterizer.rasterize(compiled, view);
-    assert(result.depth.size() == 256u * 256u);
- unsigned char  udepth[256*256*3];
- moc_->ClearBuffer();
- const Mat4 clip = view.worldToClip();
-    std::array<ClipVertex, 3> vertices{};
-
-    const unsigned boxIndices[] = {0,1,2};
-//  for (auto tri : tris) {
-//     vertices[0] = transform(tri.a, clip);
-//     vertices[1] = transform(tri.b, clip);
-//     vertices[2] = transform(tri.c, clip);
-//      const auto state = moc_->RenderTriangles(reinterpret_cast<const float*>(vertices.data()), boxIndices, 1, nullptr,
-//                            MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_ALL);
-//     /* if (state == MaskedOcclusionCulling::VISIBLE) result.visibleEmptyLeaves.push_back(node);
-//      else if (state == MaskedOcclusionCulling::OCCLUDED) 
-//      result.occludedEmptyLeaves.push_back(node);*/
-//  }
-
- //moc_->ComputePixelDepthBuffer(result.depth.data(), false);
- TonemapDepth(result.depth.data(),&udepth[0],256,256);
-    unsigned char *dp = &udepth[0];
-    for(auto d :result.depth){
-      //  std::cerr<<d<<std::endl;
-       /*  *dp++ = (char )(d*125.0);
-        *dp++ = (char )(d*125.0);
-        *dp++ = (char )(d*125.0); */
-    }
-    std::unordered_set<const OctreeNode*> unique(result.visibleEmptyLeaves.begin(), result.visibleEmptyLeaves.end());
-    unique.insert(result.occludedEmptyLeaves.begin(), result.occludedEmptyLeaves.end());
-   // assert(unique.size() == result.visibleEmptyLeaves.size() + result.occludedEmptyLeaves.size());
-
-   
-    // Sauvegarde de l'image
-    if (saveBitmap("output.bmp",(const char*)udepth, 256 , 256)) {
-        std::cout << "output.bmp cree avec succes !" << std::endl;
-    } else {
-        std::cerr << "Erreur lors de la creation de l'image." << std::endl;
-    }
 }
 
 void testResolutionValidation() {
@@ -260,7 +181,7 @@ void testResolutionValidation() {
 
 int main() {
     testResolutionValidation();
-    testCompiledTraversal();
-    std::cout << "Compiled OctreeRasterizer tests passed\n";
+    testCompiledSerialization();
+    std::cout << "Compiled Octree Serialization tests passed\n";
     return 0;
 }

@@ -47,7 +47,7 @@ public:
 
     // Traversal over precomputed integer neighbor ranges. The CompiledOctree
     // must outlive the returned pointers and must not be rebuilt after use.
-    std::vector<const OctreeNode*> visibleCells(const CompiledOctree& tree, const ViewPoint& view) const;
+    std::vector<const CompiledNode*> visibleCells(const CompiledOctree& tree, const ViewPoint& view) const;
     RasterizedOctree rasterize(const CompiledOctree& tree, const ViewPoint& view);
 
 private:

@@ -12,8 +12,8 @@ include(FetchContent)
 #set(USE_AVX512 OFF CACHE BOOL "Disable experimental AVX-512 support in MOC" FORCE)
 FetchContent_Declare(
     MaskedOcclusionCulling
-    GIT_REPOSITORY https://github.com/mp3butcher/MaskedOcclusionCulling.git
-    GIT_TAG a4075c1fbc1be4ee16ec92bec8d59ec89f325a28
+    GIT_REPOSITORY https://github.com/GameTechDev/MaskedOcclusionCulling.git
+    GIT_TAG 1fd7974456cffa481a1a534328a1d02523d19ce8
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(MaskedOcclusionCulling)
@@ -35,6 +35,11 @@ target_link_libraries(openumbra_octree_demo PRIVATE openu)
 add_executable(openu_octree_rasterizer_test tests/OctreeRasterizerTest.cpp)
 target_link_libraries(openu_octree_rasterizer_test PRIVATE openu)
 
+
+add_executable(openu_octree_compiler_test tests/OctreeCompilerTest.cpp)
+target_link_libraries(openu_octree_compiler_test PRIVATE openu)
+
 enable_testing()
 add_test(NAME openumbra_octree_demo COMMAND openumbra_octree_demo)
+add_test(NAME openu_octree_compiler COMMAND openu_octree_compiler_test)
 add_test(NAME openu_octree_rasterizer COMMAND openu_octree_rasterizer_test)
