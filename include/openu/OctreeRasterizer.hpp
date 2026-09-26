@@ -50,6 +50,9 @@ public:
     std::vector<const CompiledNode*> visibleCells(const CompiledOctree& tree, const ViewPoint& view) const;
     RasterizedOctree rasterize(const CompiledOctree& tree, const ViewPoint& view);
 
+    //test a box against computed depth buffer
+    bool testBox(std::array<Vec3, 8> &boxCorner, const ViewPoint& view);
+
 private:
     RasterizedOctree rasterizeNodes(const std::vector<const OctreeNode*>& nodes, const ViewPoint& view);
 

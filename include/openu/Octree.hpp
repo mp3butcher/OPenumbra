@@ -352,6 +352,14 @@ friend class CompiledOctreeSerializer;
 private:
     std::vector<CompiledNode> nodes_;
     std::vector<NodeId> neighborStorage_;
+    static constexpr std::array<std::pair<Axis, Direction>, 6> faces = {
+        std::make_pair(Axis::X, Direction::Negative),
+        std::make_pair(Axis::X, Direction::Positive),
+        std::make_pair(Axis::Y, Direction::Negative),
+        std::make_pair(Axis::Y, Direction::Positive),
+        std::make_pair(Axis::Z, Direction::Negative),
+        std::make_pair(Axis::Z, Direction::Positive)
+    };
 };
 
 inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
@@ -388,14 +396,7 @@ inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
     std::vector<std::vector<NodeId>> faceNeighbors(allLeaves.size() * 6);
     for (std::size_t i = 0; i < allLeaves.size(); ++i) {
         const OctreeNode* leaf = allLeaves[i];
-        const std::array<std::pair<Axis, Direction>, 6> faces = {
-            std::make_pair(Axis::X, Direction::Negative),
-            std::make_pair(Axis::X, Direction::Positive),
-            std::make_pair(Axis::Y, Direction::Negative),
-            std::make_pair(Axis::Y, Direction::Positive),
-            std::make_pair(Axis::Z, Direction::Negative),
-            std::make_pair(Axis::Z, Direction::Positive)
-        };
+
         for (std::size_t f = 0; f < faces.size(); ++f) {
             std::vector<const OctreeNode*> neighbors;
             leaf->getNeighbors(faces[f].first, faces[f].second, neighbors);
@@ -428,22 +429,10 @@ inline CompiledOctree * OcclusionOctree::compile() const {
     return CompiledOctree::build(*this);
 }
 
-
-
 class CompiledOctreeSerializer {
     private:
         static constexpr std::uint32_t MagicHeader = 0x3854434F; // "OCT8" in ASCII
         static constexpr std::uint32_t FormatVersion = 1;
-    
-        // // This internal struct mirrors CompiledNode but excludes the runtime source pointer
-        // // to ensure perfectly predictable binary layout and padding on disk.
-        // struct DiskNode {
-        //     AABB bounds;
-        //     std::array<NodeId, 8> children;
-        //     std::array<std::uint32_t, 6> neighborBegin;
-        //     std::array<std::uint16_t, 6> neighborCount;
-        //     bool occupied;
-        // };
     
     public:
         // Writes the octree to a binary file

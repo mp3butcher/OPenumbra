@@ -261,6 +261,30 @@ RasterizedOctree OctreeRasterizer::rasterizeNodes(const std::vector<const Octree
     return result;
 }
 
+bool OctreeRasterizer::testBox(std::array<Vec3, 8> &boxCorner, const ViewPoint& view)
+{
+    const Mat4 clip = view.worldToClip();
+    float xmin, ymin, xmax, ymax, nearestW;
+    xmin = ymin = std::numeric_limits<float>::infinity();
+    xmax = ymax = -std::numeric_limits<float>::infinity();
+    nearestW = std::numeric_limits<float>::infinity();
+    bool front = false, behind = false;
+    for (const Vec3& p : boxCorner) {
+        const ClipVertex q = transform(p, clip);
+        if (q.w > 0.0f) {
+            front = true;
+            xmin = std::min(xmin, q.x / q.w); xmax = std::max(xmax, q.x / q.w);
+            ymin = std::min(ymin, q.y / q.w); ymax = std::max(ymax, q.y / q.w);
+            nearestW = std::min(nearestW, q.w);
+        } else behind = true;
+    }
+    if (!front) return false;
+    if (behind) { xmin = -1.0f; ymin = -1.0f; xmax = 1.0f; ymax = 1.0f; nearestW = 0.0001f; }
+    //return true;
+
+    return moc_->TestRect(xmin, ymin, xmax, ymax, nearestW) == MaskedOcclusionCulling::VISIBLE;
+}
+
 RasterizedOctree OctreeRasterizer::rasterize(OcclusionOctree& tree, const ViewPoint& view) {
     return rasterizeNodes(visibleCells(tree, view), view);
 }
