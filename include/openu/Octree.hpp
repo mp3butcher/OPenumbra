@@ -396,7 +396,6 @@ inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
     std::vector<std::vector<NodeId>> faceNeighbors(allLeaves.size() * 6);
     for (std::size_t i = 0; i < allLeaves.size(); ++i) {
         const OctreeNode* leaf = allLeaves[i];
-
         for (std::size_t f = 0; f < faces.size(); ++f) {
             std::vector<const OctreeNode*> neighbors;
             leaf->getNeighbors(faces[f].first, faces[f].second, neighbors);

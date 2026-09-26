@@ -111,11 +111,8 @@ bool saveBitmap(const std::string& filename, const char* pixelData, int32_t widt
 
     return true;
 }
-struct ClipVertex { float x, y, z, w; };
 
-
-
-ClipVertex transform(const Vec3& p, const Mat4& m) {
+openu::ClipVertex transform(const Vec3& p, const Mat4& m) {
     return { 
             m.m[0]*p.x + m.m[1]*p.y + m.m[2]*p.z + m.m[3],
             m.m[4]*p.x + m.m[5]*p.y + m.m[6]*p.z + m.m[7],
@@ -123,6 +120,7 @@ ClipVertex transform(const Vec3& p, const Mat4& m) {
             m.m[12]*p.x + m.m[13]*p.y + m.m[14]*p.z + m.m[15]
         };
 }
+
 namespace {
 
 ViewPoint makeViewFromProjView(const float legacy[16],const float viewmatrix[16]) {
@@ -215,7 +213,7 @@ ser.loadFromFile(compiled,"octrecompiled.db");
  unsigned char  udepth[256*256*3];
  moc_->ClearBuffer();
  const Mat4 clip = view.worldToClip();
-    std::array<ClipVertex, 3> vertices{};
+    std::array<openu::ClipVertex, 3> vertices{};
 
     const unsigned boxIndices[] = {0,1,2};
 //  for (auto tri : tris) {

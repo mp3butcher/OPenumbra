@@ -13,7 +13,6 @@
 #include <memory.h>
 namespace openu {
 namespace {
-struct ClipVertex { float x, y, z, w; };
 
 std::array<Vec3, 8> corners(const AABB& b) {
     return {{{b.min.x,b.min.y,b.min.z}, {b.max.x,b.min.y,b.min.z}, {b.min.x,b.max.y,b.min.z}, {b.max.x,b.max.y,b.min.z},
@@ -261,16 +260,14 @@ RasterizedOctree OctreeRasterizer::rasterizeNodes(const std::vector<const Octree
     return result;
 }
 
-bool OctreeRasterizer::testBox(std::array<Vec3, 8> &boxCorner, const ViewPoint& view)
+bool OctreeRasterizer::testBox(std::array<ClipVertex, 8> &boxCorner)
 {
-    const Mat4 clip = view.worldToClip();
     float xmin, ymin, xmax, ymax, nearestW;
     xmin = ymin = std::numeric_limits<float>::infinity();
     xmax = ymax = -std::numeric_limits<float>::infinity();
     nearestW = std::numeric_limits<float>::infinity();
     bool front = false, behind = false;
-    for (const Vec3& p : boxCorner) {
-        const ClipVertex q = transform(p, clip);
+    for (const ClipVertex& q : boxCorner) {
         if (q.w > 0.0f) {
             front = true;
             xmin = std::min(xmin, q.x / q.w); xmax = std::max(xmax, q.x / q.w);

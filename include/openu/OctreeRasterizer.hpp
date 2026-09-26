@@ -6,7 +6,7 @@
 class MaskedOcclusionCulling;
 
 namespace openu {
-
+struct ClipVertex { float x, y, z, w; };
 struct ViewPoint {
     Mat4 view = Mat4::identity();
     Mat4 projection = Mat4::identity();
@@ -51,7 +51,7 @@ public:
     RasterizedOctree rasterize(const CompiledOctree& tree, const ViewPoint& view);
 
     //test a box against computed depth buffer
-    bool testBox(std::array<Vec3, 8> &boxCorner, const ViewPoint& view);
+    bool testBox(std::array<ClipVertex, 8> &boxCorner);
 
 private:
     RasterizedOctree rasterizeNodes(const std::vector<const OctreeNode*>& nodes, const ViewPoint& view);
