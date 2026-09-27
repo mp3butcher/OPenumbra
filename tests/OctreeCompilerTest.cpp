@@ -161,6 +161,9 @@ void testCompiledSerialization() {
     assert(compiled.nodeCount() == tree.leaves().size());
     assert(compiled.locate({-0.080155, 0.07, 0.0656662}) != InvalidNode);
 
+    CompiledOctree compilednminus;
+    compilednminus.buildLevelDown(compiled);
+    
 CompiledOctreeSerializer ser;
 ser.saveToFile(compiled,"octrecompiled.db");
 

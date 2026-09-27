@@ -228,6 +228,16 @@ ser.loadFromFile(compiled,"octrecompiled.db");
 //  }
 
  //moc_->ComputePixelDepthBuffer(result.depth.data(), false);
+
+ std::array<openu::ClipVertex, 8> tbox; 
+ openu::Vec3 box[]={{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0},
+ { 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}};
+
+ for(int i=0; i<8; ++i)
+ tbox[i]=transform(box[i], clip);
+  assert(rasterizer.testBox(tbox)==false);
+ 
+
  TonemapDepth(result.depth.data(),&udepth[0],256,256);
     unsigned char *dp = &udepth[0];
     for(auto d :result.depth){

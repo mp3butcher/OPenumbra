@@ -9,6 +9,11 @@
 #include <memory>
 #include <vector>
 #include <fstream>
+
+#include <unordered_map>
+#include <unordered_set>
+#include <memory.h>
+
 namespace openu {
 
 struct Vec3 {
@@ -19,6 +24,11 @@ struct Vec3 {
     Vec3 operator-(const Vec3& v) const { return {x - v.x, y - v.y, z - v.z}; }
     Vec3 operator*(float s) const { return {x * s, y * s, z * s}; }
     Vec3 operator/(float s) const { return {x / s, y / s, z / s}; }
+    bool operator==(const Vec3& v) const {
+        return x==v.x&&y==v.y&&z==v.z;
+    } bool operator!=(const Vec3& v) const {
+        return x!=v.x||y!=v.y||z!=v.z;
+    }
 };
 
 struct Mat4 {
@@ -63,6 +73,9 @@ struct Triangle {
 struct AABB {
     Vec3 min, max;
     Vec3 center() const { return (min + max) * 0.5f; }
+
+    // bool operator<(const AABB& rhs) const  
+    // {if (min!=rhs.min) return min<rhs.min; else return max<rhs.max;}
 
     bool intersects(const AABB& b) const {
         return min.x <= b.max.x && max.x >= b.min.x &&
@@ -327,6 +340,7 @@ friend class CompiledOctreeSerializer;
     CompiledOctree& operator=(const CompiledOctree&) = delete;
 
     static CompiledOctree* build(const OcclusionOctree& tree);
+    static CompiledOctree* buildLevelDown(const CompiledOctree& fineLevel) ;
 
     std::size_t nodeCount() const { return nodes_.size(); }
     const CompiledNode& node(NodeId id) const { return nodes_.at(id); }
@@ -360,7 +374,196 @@ private:
         std::make_pair(Axis::Z, Direction::Negative),
         std::make_pair(Axis::Z, Direction::Positive)
     };
+    static bool childTouchesParentFace(const AABB& child, const AABB& parent, std::size_t faceIndex) {
+        const float eps = 1e-5f;
+        switch (faceIndex) {
+            case 0: return std::abs(child.min.x - parent.min.x) < eps; // Face X-
+            case 1: return std::abs(child.max.x - parent.max.x) < eps; // Face X+
+            case 2: return std::abs(child.min.y - parent.min.y) < eps; // Face Y-
+            case 3: return std::abs(child.max.y - parent.max.y) < eps; // Face Y+
+            case 4: return std::abs(child.min.z - parent.min.z) < eps; // Face Z-
+            case 5: return std::abs(child.max.z - parent.max.z) < eps; // Face Z+
+            default: return false;
+        }
+    }
 };
+
+
+
+// Structure temporaire pour regrouper les données pendant la fusion
+struct ParentCandidate {
+    AABB bounds;
+    bool occupied = false;
+    std::vector<NodeId> childrenIds; // Les indices (0 à 7) des enfants dans le niveau n
+};
+// 1. Définition du Hash pour vos AABB
+struct BoundsHash {
+    std::size_t operator()(const AABB& bounds) const {
+        // On utilise le centre de la boîte, qui est unique pour chaque parent
+        Vec3 c = bounds.center();
+        
+        // Extraction des bits des floats pour un hachage binaire pur
+        std::uint32_t ix, iy, iz;
+        memcpy(&ix, &c.x, sizeof(float));
+        memcpy(&iy, &c.y, sizeof(float));
+        memcpy(&iz, &c.z, sizeof(float));
+        
+        // Combinaison de hachage de type "std::hash_combine" (façon Boost)
+        std::size_t seed = 0;
+        auto hash_combine = [&seed](std::uint32_t val) {
+            seed ^= std::hash<std::uint32_t>{}(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        };
+        
+        hash_combine(ix);
+        hash_combine(iy);
+        hash_combine(iz);
+        
+        return seed;
+    }
+};
+
+// 2. Définition du comparateur d'égalité (indispensable pour std::unordered_map)
+struct BoundsEqual {
+    bool operator()(const AABB& lhs, const AABB& rhs) const {
+        // Une petite tolérance (epsilon) est recommandée pour éviter les écarts de float
+        const float eps = 1e-5f;
+        return std::abs(lhs.min.x - rhs.min.x) < eps &&
+               std::abs(lhs.min.y - rhs.min.y) < eps &&
+               std::abs(lhs.min.z - rhs.min.z) < eps &&
+               std::abs(lhs.max.x - rhs.max.x) < eps &&
+               std::abs(lhs.max.y - rhs.max.y) < eps &&
+               std::abs(lhs.max.z - rhs.max.z) < eps;
+    }
+};
+// Fonction pour générer le niveau inférieur (plus grossier)
+inline CompiledOctree* CompiledOctree::buildLevelDown(const CompiledOctree& fineLevel) {
+    CompiledOctree* coarseLevel = new CompiledOctree();
+    
+    // Hash pour regrouper les nœuds enfants par leur boîte englobante parente
+    // Clé : Centre de la boîte parente (ou une clé unique basée sur les coordonnées)
+    // Pour l'exemple, on utilise un système de clé basé sur la boîte parente simulée
+    auto getParentBounds = [](const AABB &childBounds)
+    {
+        AABB parent;
+        // 1. Calculer la taille de la boîte enfant (le pas de la grille enfant)
+        Vec3 childSize = childBounds.max - childBounds.min;
+        // 2. La taille du parent est exactement le double
+        Vec3 parentSize = childSize * 2.0f;
+        // 3. Aligner le 'min' de l'enfant sur la grille du parent.
+        // On ajoute un léger décalage (childSize * 0.5f) pour s'assurer que le centre
+        // de l'enfant se projette au bon endroit, peu importe dans quel octant il se trouve.
+        Vec3 center = childBounds.center();
+        parent.min.x = std::floor(center.x / parentSize.x) * parentSize.x;
+        parent.min.y = std::floor(center.y / parentSize.y) * parentSize.y;
+        parent.min.z = std::floor(center.z / parentSize.z) * parentSize.z;
+        // 4. Le 'max' du parent découle naturellement de sa taille
+        parent.max = parent.min + parentSize;
+        return parent;
+    };
+
+    // 1. Regrouper les nœuds fins par parent géométrique
+    // Associe les coordonnées de la bounding box parente à son candidat
+    // (Note : Dans une structure de production, utilisez une clé entière/hash unique pour vos Bounds)
+    std::vector<ParentCandidate> parents;
+    std::unordered_map<AABB, std::size_t,BoundsHash, BoundsEqual> boundsToParentIdx; 
+    
+    // Tableau pour savoir à quel parent appartient chaque nœud fin
+    std::vector<std::size_t> childToParentMap(fineLevel.nodes_.size());
+
+    for (NodeId i = 0; i < fineLevel.nodes_.size(); ++i) {
+        AABB pBounds = getParentBounds(fineLevel.nodes_[i].bounds);
+        
+        std::unordered_map<AABB, std::size_t,BoundsHash, BoundsEqual>::iterator  it = boundsToParentIdx.find(pBounds);
+        if (it == boundsToParentIdx.end()) {
+            std::size_t newIdx = parents.size();
+            boundsToParentIdx[pBounds] = newIdx;
+            
+            ParentCandidate p;
+            p.bounds = pBounds;
+            p.occupied = fineLevel.nodes_[i].occupied;
+            p.childrenIds.push_back(i);
+            parents.push_back(p);
+            
+            childToParentMap[i] = newIdx;
+        } else {
+            std::size_t pIdx = it->second;
+            parents[pIdx].occupied |= fineLevel.nodes_[i].occupied; // Logique "Conservative"
+            parents[pIdx].childrenIds.push_back(i);
+            
+            childToParentMap[i] = pIdx;
+        }
+    }
+
+    // 2. Allouer les nœuds du niveau grossier
+    coarseLevel->nodes_.resize(parents.size());
+    for (std::size_t i = 0; i < parents.size(); ++i) {
+        coarseLevel->nodes_[i].bounds = parents[i].bounds;
+        coarseLevel->nodes_[i].occupied = parents[i].occupied;
+        for (auto& child : coarseLevel->nodes_[i].children) child = InvalidNode;
+    }
+
+    // 3. Fusionner les voisins géométriquement sans appeler l'arbre d'origine
+    std::vector<std::vector<NodeId>> coarseFaceNeighbors(parents.size() * 6);
+
+    for (std::size_t i = 0; i < parents.size(); ++i) {
+        const auto& pCandidate = parents[i];
+        
+        for (std::size_t f = 0; f < 6; ++f) {
+            // Utiliser un set pour éviter les doublons de voisins (plusieurs enfants peuvent partager le même voisin)
+            std::unordered_set<NodeId> uniqueCoarseNeighbors;
+            
+            for (NodeId childId : pCandidate.childrenIds) {
+                // Étape CRITIQUE : Vérifier si cet enfant touche la face 'f' du parent.
+                // (Si l'enfant est à l'intérieur de l'octree et ne touche pas la face externe 'f', 
+                // ses voisins sur cette face sont ses frères, donc internes au parent -> On les ignore).
+                if (!childTouchesParentFace(fineLevel.nodes_[childId].bounds, pCandidate.bounds, f)) {
+                    continue; 
+                }
+
+                // Parcourir les voisins de l'enfant au niveau fin
+                std::uint32_t start = fineLevel.nodes_[childId].neighborBegin[f];
+                std::uint32_t count = fineLevel.nodes_[childId].neighborCount[f];
+                
+                for (std::uint32_t n = 0; n < count; ++n) {
+                    NodeId fineNeighborId = fineLevel.neighborStorage_[start + n];
+                    
+                    // Trouver le parent de ce voisin fin
+                    std::size_t coarseNeighborIdx = childToParentMap[fineNeighborId];
+                    
+                    // Si le parent du voisin n'est pas le nœud actuel lui-même, c'est un voisin valide !
+                    if (coarseNeighborIdx != i) {
+                        uniqueCoarseNeighbors.insert(static_cast<NodeId>(coarseNeighborIdx));
+                    }
+                }
+            }
+
+            // Ajouter les voisins uniques trouvés pour cette face
+            auto& fNeighbors = coarseFaceNeighbors[i * 6 + f];
+            for (NodeId cNeigh : uniqueCoarseNeighbors) {
+                fNeighbors.push_back(cNeigh);
+            }
+        }
+    }
+
+    // 4. Copie finale dans le stockage linéaire du niveau grossier
+    std::size_t totalNeighbors = 0;
+    for (auto& v : coarseFaceNeighbors) totalNeighbors += v.size();
+    coarseLevel->neighborStorage_.reserve(totalNeighbors);
+
+    for (std::size_t i = 0; i < parents.size(); ++i) {
+        for (std::size_t f = 0; f < 6; ++f) {
+            coarseLevel->nodes_[i].neighborBegin[f] = static_cast<std::uint32_t>(coarseLevel->neighborStorage_.size());
+            auto& neighbors = coarseFaceNeighbors[i * 6 + f];
+            coarseLevel->nodes_[i].neighborCount[f] = static_cast<std::uint32_t>(neighbors.size());
+            
+            for (NodeId neighborId : neighbors) {
+                coarseLevel->neighborStorage_.push_back(neighborId);
+            }
+        }
+    }
+
+    return coarseLevel;
+}
 
 inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
     CompiledOctree *outp = new CompiledOctree();
@@ -389,7 +592,11 @@ inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
         out.nodes_[i].occupied = allLeaves[i]->occupied;
         for (auto& child : out.nodes_[i].children) child = InvalidNode;
     }
-
+    std::unordered_map<const OctreeNode*, NodeId> nodeToIndex;
+    nodeToIndex.reserve(allLeaves.size());
+    for (std::size_t i = 0; i < allLeaves.size(); ++i) {
+        nodeToIndex[allLeaves[i]] = static_cast<NodeId>(i);
+    }
     // Precompute a simple, conservative face-neighbor adjacency by reusing the
     // adaptive neighbor logic while compiling. This is O(N * faces), but the cost
     // is paid once at compile time, not every frame.
@@ -401,9 +608,9 @@ inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree) {
             leaf->getNeighbors(faces[f].first, faces[f].second, neighbors);
             for (const OctreeNode* neighbor : neighbors) {
                 if (!neighbor) continue;
-                auto it = std::find(allLeaves.begin(), allLeaves.end(), neighbor);
-                if (it == allLeaves.end()) continue;
-                faceNeighbors[i * 6 + f].push_back(static_cast<NodeId>(std::distance(allLeaves.begin(), it)));
+                auto it = nodeToIndex.find(neighbor);//std::find(allLeaves.begin(), allLeaves.end(), neighbor);
+                if (it == nodeToIndex.end()) continue;
+                faceNeighbors[i * 6 + f].push_back(it->second);//static_cast<NodeId>(std::distance(allLeaves.begin(), it)));
             }
         }
     }
