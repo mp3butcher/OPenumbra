@@ -288,21 +288,65 @@ RasterizedOctree OctreeRasterizer::rasterize(OcclusionOctree& tree, const ViewPo
 
 RasterizedOctree OctreeRasterizer::rasterize(const CompiledOctree& tree, const ViewPoint& view) {
    // return rasterizeNodes(visibleCells(tree, view), view);
-    auto visi=visibleCells(tree, view);
-    RasterizedOctree result;
-    result.width = width_; result.height = height_;
-	moc_->SetNearClipPlane(0.1f);
-    moc_->ClearBuffer();
-    const Mat4 clip = view.worldToClip();
-    std::array<ClipVertex, 8> vertices{};
+  // std::vector<const CompiledNode*> visible;
+  uint nbvisibles{0};
+   std::array<ClipVertex, 8> vertices{};
+  // if (tree.nodeCount() == 0) return visible;
 
-    for (const CompiledNode *node : visi)
-    {
+   if (visitStamp_.size() != tree.nodeCount()) visitStamp_.assign(tree.nodeCount(), 0);
+   ++traversalStamp_;
+   if (traversalStamp_ == 0) {
+       std::fill(visitStamp_.begin(), visitStamp_.end(), 0);
+       traversalStamp_ = 1;
+   }
+   auto pos = view.cameraPosition();
+   NodeId start = InvalidNode;
+   const OctreeNode* sourceStart = nullptr;
+   // CompiledOctree currently stores terminal cells, so locate once by source
+   // pointer; all subsequent operations use integer IDs and flat ranges.
+   // This linear lookup is outside the hot neighbor traversal loop.
+   for (NodeId id = 0; id < tree.nodeCount(); ++id) {
+       const CompiledNode& n = tree.node(id);
+       // if (n.source && n.bounds.contains(pos)) { start = id; sourceStart = n.source; break; }
+       if ( n.bounds.contains(pos)) { start = id; break; }
+   }
+  // (void)sourceStart;
+  // if (start == InvalidNode)       return visible;
 
-        if (!node || !node->occupied)
-            continue;
+   frontier_.clear();
+   visitStamp_[start] = traversalStamp_;
+   //frontier_.push_back(start);
+   const CompiledNode &node = tree.node(start);
+   const Mat4 clip = view.worldToClip();
+   for (std::size_t face = 0; face < 6; ++face)
+   {
+       const std::uint32_t begin = node.neighborBegin[face];
+       const std::uint32_t end = begin + node.neighborCount[face];
+       const auto &neighbors = tree.neighborStorage();
+       for (std::uint32_t i = begin; i < end; ++i)
+       {
+           const NodeId neighbor = neighbors[i];
+           if (neighbor == InvalidNode || visitStamp_[neighbor] == traversalStamp_)
+               continue;
+            if (aabbIntersectsFrustum(tree.node(neighbor).bounds, clip)) 
+          frontier_.push_back(neighbor);
+          
+       }
+   }
+   while (!frontier_.empty())
+   {
+       const NodeId id = frontier_.back();
+       frontier_.pop_back();
+       if (id == InvalidNode || id >= tree.nodeCount() || visitStamp_[id] == traversalStamp_)
+           continue;
+       visitStamp_[id] = traversalStamp_;
+       const CompiledNode &node = tree.node(id);
+       if (node.occupied)
+       {
+
+        nbvisibles++;
         // Reprenez vos vraies bornes d'origine (SANS le shrink de 0.9)
-        const auto points = corners(node->bounds);
+        const auto points = corners(node.bounds);
         for (std::size_t i = 0; i < points.size(); ++i)
         {
             vertices[i] = transform(points[i], clip);
@@ -311,8 +355,8 @@ RasterizedOctree OctreeRasterizer::rasterize(const CompiledOctree& tree, const V
         std::array<uint, 36> indices{};
         uint curidx = 0;
         // Calcul du vecteur allant du centre du nœud vers la caméra (en World Space)
-        Vec3 nodeCenter = (node->bounds.min + node->bounds.max) * 0.5f;
-        Vec3 toCamera = view.cameraPosition() - nodeCenter;
+        Vec3 nodeCenter = (node.bounds.min + node.bounds.max) * 0.5f;
+        Vec3 toCamera = pos - nodeCenter;
 
         // On cherche quelles faces regardent la caméra (produit scalaire > 0)
         for (int f = 0; f < 6; ++f)
@@ -335,7 +379,68 @@ RasterizedOctree OctreeRasterizer::rasterize(const CompiledOctree& tree, const V
             MaskedOcclusionCulling::BACKFACE_NONE,
             MaskedOcclusionCulling::CLIP_PLANE_ALL);
     }
-
+       else{
+        float xmin, ymin, xmax, ymax, nearestW;
+        xmin = ymin = std::numeric_limits<float>::infinity();
+        xmax = ymax = -std::numeric_limits<float>::infinity();
+        nearestW = std::numeric_limits<float>::infinity();
+        bool front = false, behind = false;
+        for (const Vec3& p : corners(node.bounds)) {
+            const ClipVertex q = transform(p, clip);
+            if (q.w > 0.0f) {
+                            front = true;
+                            xmin = std::min(xmin, q.x / q.w); xmax = std::max(xmax, q.x / q.w);
+                            ymin = std::min(ymin, q.y / q.w); ymax = std::max(ymax, q.y / q.w);
+                            nearestW = std::min(nearestW, q.w);
+                        } else behind = true;
+        }
+        if (!front)  continue;
+        if (behind) { xmin = -1.0f; ymin = -1.0f; xmax = 1.0f; ymax = 1.0f; nearestW = 0.0001f; }
+       if( moc_->TestRect(xmin, ymin, xmax, ymax, nearestW) == MaskedOcclusionCulling::VISIBLE)
+           for (std::size_t face = 0; face < 6; ++face)
+           {
+               const std::uint32_t begin = node.neighborBegin[face];
+               const std::uint32_t end = begin + node.neighborCount[face];
+               const auto &neighbors = tree.neighborStorage();
+               for (std::uint32_t i = begin; i < end; ++i)
+               {
+                   // std::cout<<i<<" chek neighbor node" <<std::endl;
+                   const NodeId neighbor = neighbors[i];
+                   if (neighbor == InvalidNode || visitStamp_[neighbor] == traversalStamp_)
+                       continue;
+                    if (aabbIntersectsFrustum(tree.node(neighbor).bounds, clip))
+                //   {
+                //     float xmin, ymin, xmax, ymax, nearestW;
+                //     xmin = ymin = std::numeric_limits<float>::infinity();
+                //     xmax = ymax = -std::numeric_limits<float>::infinity();
+                //     nearestW = std::numeric_limits<float>::infinity();
+                //     bool front = false, behind = false;
+                //     for (const ClipVertex& q : boxCorner) {
+                //         if (q.w > 0.0f) {
+                //             front = true;
+                //             xmin = std::min(xmin, q.x / q.w); xmax = std::max(xmax, q.x / q.w);
+                //             ymin = std::min(ymin, q.y / q.w); ymax = std::max(ymax, q.y / q.w);
+                //             nearestW = std::min(nearestW, q.w);
+                //         } else behind = true;
+                //     }
+                //     if (!front) return false;
+                //     if (behind) { xmin = -1.0f; ymin = -1.0f; xmax = 1.0f; ymax = 1.0f; nearestW = 0.0001f; }
+                //     //return true;
+                
+                //     return moc_->TestRect(xmin, ymin, xmax, ymax, nearestW) == MaskedOcclusionCulling::VISIBLE;
+                //   }  
+                  frontier_.push_back(neighbor);
+                  
+               }
+           }
+       }
+   }
+    RasterizedOctree result;
+    result.width = width_; result.height = height_;
+   // moc_->ClearBuffer();
+std::cout<<nbvisibles<<std::endl;
+   
+ 
     result.depth.resize(static_cast<std::size_t>(width_) * height_);
     moc_->ComputePixelDepthBuffer(result.depth.data(), false);
     return result;
