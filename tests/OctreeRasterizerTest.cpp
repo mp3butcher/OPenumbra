@@ -3,12 +3,12 @@
 #include <stdexcept>
 #include <unordered_set>
 #include <vector>
-#include "openu/Octree.hpp"
+#include "MaskedOcclusionCulling.h"
+//#include "openu/Octree.hpp"
 #include "openu/OctreeRasterizer.hpp"
 #include <float.h>
 #include <fstream>
 
-#include "MaskedOcclusionCulling.h"
 using namespace openu;
 static void TonemapDepth(const float *depth, unsigned char *image, int w, int h)
 {
@@ -230,12 +230,11 @@ ser.loadFromFile(compiled,"octrecompiled.db");
  //moc_->ComputePixelDepthBuffer(result.depth.data(), false);
 
  std::array<openu::ClipVertex, 8> tbox; 
- openu::Vec3 box[]={{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0},
- { 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}};
+ openu::Vec3 box[]={{ 0.0,  0.25, -5.0},{-0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},
+ { 0.0,  0.25, -5.0},{-0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},{ 0.5, -0.25, -5.0}};
 
  for(int i=0; i<8; ++i)
  tbox[i]=transform(box[i], clip);
-  assert(rasterizer.testBox(tbox)==false);
  
 
  TonemapDepth(result.depth.data(),&udepth[0],256,256);
@@ -257,6 +256,8 @@ ser.loadFromFile(compiled,"octrecompiled.db");
     } else {
         std::cerr << "Erreur lors de la creation de l'image." << std::endl;
     }
+
+  assert(rasterizer.testBox(tbox)==false);
 }
 
 void testResolutionValidation() {

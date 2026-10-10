@@ -170,7 +170,18 @@ ser.saveToFile(compiled,"octrecompiled.db");
 CompiledOctree compiledread;
 ser.loadFromFile(compiledread,"octrecompiled.db");
 assert(compiled.nodeCount() == compiledread.nodeCount());
+for(uint i=0;i<compiled.nodeCount();++i)
+{
+    assert(compiled.node(i).bounds.min==compiledread.node(i).bounds.min);
+    assert(compiled.node(i).bounds.max==compiledread.node(i).bounds.max);
+    assert(compiled.node(i).occupied==compiledread.node(i).occupied);
+    assert(compiled.node(i).neighborBegin==compiledread.node(i).neighborBegin);
+    assert(compiled.node(i).neighborCount==compiledread.node(i).neighborCount);
+    assert(compiled.node(i).children==compiledread.node(i).children);
 
+
+
+}
 }
 
 void testResolutionValidation() {
