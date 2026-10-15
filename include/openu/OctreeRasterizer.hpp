@@ -6,6 +6,18 @@
 class MaskedOcclusionCulling;
 
 namespace openu {
+struct Plan {
+    Vec3 normal;
+    float d;
+
+    float distance(const Vec3& p) const {
+        return p.x * normal.x + p.y * normal.y + p.z * normal.z + d;
+    }
+};
+
+struct Frustum {
+    std::array<Plan, 6> planes;
+};
 struct ClipVertex { float x, y, z, w; };
 struct ViewPoint {
     Mat4 view = Mat4::identity();
@@ -52,11 +64,14 @@ public:
 
     //test a box against computed depth buffer
     bool testBox(std::array<ClipVertex, 8> &boxCorner);
+    RasterizedOctree renderFrontToBack(const CompiledOctree& tree,  const ViewPoint& view) ;
+    void renderNodeRecursive(const CompiledOctree& tree, NodeId id, const Vec3& cameraPos, const Frustum& frustum, const Mat4& clip) ;
 
+    inline MaskedOcclusionCulling& maskedOcclusionCulling() { return *moc_; }
 private:
+    MaskedOcclusionCulling* moc_;
     RasterizedOctree rasterizeNodes(const std::vector<const OctreeNode*>& nodes, const ViewPoint& view);
 
-    MaskedOcclusionCulling* moc_;
     unsigned width_;
     unsigned height_;
     mutable std::vector<std::uint32_t> visitStamp_;

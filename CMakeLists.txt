@@ -25,11 +25,11 @@ if (UNIX AND NOT APPLE)
     file(WRITE "${maskedocclusionculling_SOURCE_DIR}/CompilerSpecific.inl" "${MOC_COMPILER_SPECIFIC}")
 endif()
 
-add_library(openu STATIC src/OctreeRasterizer.cpp)
+add_library(openu STATIC src/OctreeRasterizer.cpp src/Octree.cpp)
 target_include_directories(openu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(openu PUBLIC MaskedOcclusionCulling)
 
-add_executable(openumbra_octree_demo src/main.cpp)
+add_executable(openumbra_octree_demo src/main.cpp )
 target_link_libraries(openumbra_octree_demo PRIVATE openu)
 
 add_executable(openu_octree_rasterizer_test tests/OctreeRasterizerTest.cpp)

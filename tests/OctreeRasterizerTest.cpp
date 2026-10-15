@@ -44,7 +44,7 @@ static void TonemapDepth(const float *depth, unsigned char *image, int w, int h)
                 intensity = static_cast<int>(223.0f * (depth[i] - minW) / range + 32.0f);
             }
         }
-            
+
         image[i * 3 + 0] = static_cast<unsigned char>(intensity);
         image[i * 3 + 1] = static_cast<unsigned char>(intensity);
         image[i * 3 + 2] = static_cast<unsigned char>(intensity);
@@ -114,11 +114,11 @@ bool saveBitmap(const std::string& filename, const char* pixelData, int32_t widt
 
 openu::ClipVertex transform(const Vec3& p, const Mat4& m) {
     return { 
-            m.m[0]*p.x + m.m[1]*p.y + m.m[2]*p.z + m.m[3],
-            m.m[4]*p.x + m.m[5]*p.y + m.m[6]*p.z + m.m[7],
-            m.m[8]*p.x + m.m[9]*p.y + m.m[10]*p.z + m.m[11],
-            m.m[12]*p.x + m.m[13]*p.y + m.m[14]*p.z + m.m[15]
-        };
+        m.m[0]*p.x + m.m[1]*p.y + m.m[2]*p.z + m.m[3],
+        m.m[4]*p.x + m.m[5]*p.y + m.m[6]*p.z + m.m[7],
+        m.m[8]*p.x + m.m[9]*p.y + m.m[10]*p.z + m.m[11],
+        m.m[12]*p.x + m.m[13]*p.y + m.m[14]*p.z + m.m[15]
+    };
 }
 
 namespace {
@@ -140,42 +140,42 @@ ViewPoint makeViewFromProjView(const float legacy[16],const float viewmatrix[16]
 }
 void testCompiledTraversal() {
 
-//     std::cerr<<" create octree"<<std::endl;
-//     OcclusionOctree tree({{-10, -10, -10}, {10, 10, 10}},8, 0);
-//       tree.insert(Triangle{{-1.8f, -8.8f, -5.2f}, {.8f, -8.8f, -5.2f}, {0, 8.8f, -10.2f}});
-//    tree.insert(Triangle{{5.7f, 1.7f, -1.3f}, {.7f, 7.7f, -1.3f}, {0, -8.7f, -1.3f}});
-//   //  tree.insert(Triangle{{15.7f, -10.7f, -1.3f}, {.7f, -70.7f, 1.3f}, {0, -8.7f, 10.3f}});
+    //     std::cerr<<" create octree"<<std::endl;
+    //     OcclusionOctree tree({{-10, -10, -10}, {10, 10, 10}},8, 0);
+    //       tree.insert(Triangle{{-1.8f, -8.8f, -5.2f}, {.8f, -8.8f, -5.2f}, {0, 8.8f, -10.2f}});
+    //    tree.insert(Triangle{{5.7f, 1.7f, -1.3f}, {.7f, 7.7f, -1.3f}, {0, -8.7f, -1.3f}});
+    //   //  tree.insert(Triangle{{15.7f, -10.7f, -1.3f}, {.7f, -70.7f, 1.3f}, {0, -8.7f, 10.3f}});
 
-//   std::vector<Triangle> tris;
-//    tree.insert(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
-//   tree.insert(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
+    //   std::vector<Triangle> tris;
+    //    tree.insert(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
+    //   tree.insert(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
 
-//    tris.push_back(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
-//    tris.push_back(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
-//     std::cerr<<tree.leaves().size()<<std::endl;
+    //    tris.push_back(Triangle{{ 0.0,  0.5, -5.0},{-0.5, -0.5, -5.0},{ 0.5, -0.5, -5.0}});
+    //    tris.push_back(Triangle{{ 0.0,  0.5, -2.0},{-0.5, -0.5, -2.0} ,{ 0.5, -0.5, -2.0}});
+    //     std::cerr<<tree.leaves().size()<<std::endl;
 
-//     std::cerr<<" compiling octree"<<std::endl;
-//     CompiledOctree &compiled = *tree.compile();
+    //     std::cerr<<" compiling octree"<<std::endl;
+    //     CompiledOctree &compiled = *tree.compile();
 
-//     std::cerr<<" compiled octree"<<std::endl;
-//     assert(compiled.nodeCount() == tree.leaves().size());
-//     assert(compiled.locate({-0.080155, 0.07, 0.0656662}) != InvalidNode);
+    //     std::cerr<<" compiled octree"<<std::endl;
+    //     assert(compiled.nodeCount() == tree.leaves().size());
+    //     assert(compiled.locate({-0.080155, 0.07, 0.0656662}) != InvalidNode);
 
-CompiledOctreeSerializer ser;
-CompiledOctree compiled;
-ser.loadFromFile(compiled,"octrecompiled.db");
+    CompiledOctreeSerializer ser;
+    CompiledOctree compiled;
+    ser.loadFromFile(compiled,"octrecompiled.db");
 
     OctreeRasterizer rasterizer(256, 256);
     MaskedOcclusionCulling *moc_ = MaskedOcclusionCulling::Create();	
     MaskedOcclusionCulling::Implementation implementation = moc_->GetImplementation();
-	switch (implementation) {
-	case MaskedOcclusionCulling::SSE2: printf("Using SSE2 version\n"); break;
-	case MaskedOcclusionCulling::SSE41: printf("Using SSE41 version\n"); break;
-	case MaskedOcclusionCulling::AVX2: printf("Using AVX2 version\n"); break;
-	case MaskedOcclusionCulling::AVX512: printf("Using AVX-512 version\n"); break;
-	}
+    switch (implementation) {
+    case MaskedOcclusionCulling::SSE2: printf("Using SSE2 version\n"); break;
+    case MaskedOcclusionCulling::SSE41: printf("Using SSE41 version\n"); break;
+    case MaskedOcclusionCulling::AVX2: printf("Using AVX2 version\n"); break;
+    case MaskedOcclusionCulling::AVX512: printf("Using AVX-512 version\n"); break;
+    }
     moc_->SetResolution(256, 256);
-  /*   const float projection[16] = {
+    /*   const float projection[16] = {
         2.98564, 0, 0, 0,
         0, -3.73205, 0, 0,
         0, 0, 9.52472e-05, 0.0415094,
@@ -187,7 +187,7 @@ ser.loadFromFile(compiled,"octrecompiled.db");
         0, -1, 0, -99.07,
         0, 0, 0, 1
     };*/
-   const float projection[16] = {
+    const float projection[16] = {
         2.414, 0, 0, 0,
         0, 2.414, 0, 0,
         0, 0, -1.02, -0.202,
@@ -208,48 +208,48 @@ ser.loadFromFile(compiled,"octrecompiled.db");
 
     std::cout<<first.size()<<" visible nodes" <<std::endl;
 
-     RasterizedOctree result = rasterizer.rasterize(compiled, view);
+    RasterizedOctree result = rasterizer.renderFrontToBack(compiled, view);
     assert(result.depth.size() == 256u * 256u);
- unsigned char  udepth[256*256*3];
- moc_->ClearBuffer();
- const Mat4 clip = view.worldToClip();
+    unsigned char  udepth[256*256*3];
+    moc_->ClearBuffer();
+    const Mat4 clip = view.worldToClip();
     std::array<openu::ClipVertex, 3> vertices{};
 
     const unsigned boxIndices[] = {0,1,2};
-//  for (auto tri : tris) {
-//     vertices[0] = transform(tri.a, clip);
-//     vertices[1] = transform(tri.b, clip);
-//     vertices[2] = transform(tri.c, clip);
-//      const auto state = moc_->RenderTriangles(reinterpret_cast<const float*>(vertices.data()), boxIndices, 1, nullptr,
-//                            MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_ALL);
-//     /* if (state == MaskedOcclusionCulling::VISIBLE) result.visibleEmptyLeaves.push_back(node);
-//      else if (state == MaskedOcclusionCulling::OCCLUDED) 
-//      result.occludedEmptyLeaves.push_back(node);*/
-//  }
+    //  for (auto tri : tris) {
+    //     vertices[0] = transform(tri.a, clip);
+    //     vertices[1] = transform(tri.b, clip);
+    //     vertices[2] = transform(tri.c, clip);
+    //      const auto state = moc_->RenderTriangles(reinterpret_cast<const float*>(vertices.data()), boxIndices, 1, nullptr,
+    //                            MaskedOcclusionCulling::BACKFACE_CW, MaskedOcclusionCulling::CLIP_PLANE_ALL);
+    //     /* if (state == MaskedOcclusionCulling::VISIBLE) result.visibleEmptyLeaves.push_back(node);
+    //      else if (state == MaskedOcclusionCulling::OCCLUDED)
+    //      result.occludedEmptyLeaves.push_back(node);*/
+    //  }
 
- //moc_->ComputePixelDepthBuffer(result.depth.data(), false);
+    //moc_->ComputePixelDepthBuffer(result.depth.data(), false);
 
- std::array<openu::ClipVertex, 8> tbox; 
- openu::Vec3 box[]={{ 0.0,  0.25, -5.0},{-0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},
- { 0.0,  0.25, -5.0},{-0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},{ 0.5, -0.25, -5.0}};
+    std::array<openu::ClipVertex, 8> tbox;
+    openu::Vec3 box[]={{ 0.0,  0.25, -5.0},{-0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},
+                         { 0.0,  0.25, -5.0},{-0.25, -0.25, -5.0},{ 0.25, -0.25, -5.0},{ 0.5, -0.25, -5.0}};
 
- for(int i=0; i<8; ++i)
- tbox[i]=transform(box[i], clip);
- 
+    for(int i=0; i<8; ++i)
+        tbox[i]=transform(box[i], clip);
 
- TonemapDepth(result.depth.data(),&udepth[0],256,256);
+
+    TonemapDepth(result.depth.data(),&udepth[0],256,256);
     unsigned char *dp = &udepth[0];
     for(auto d :result.depth){
-      //  std::cerr<<d<<std::endl;
-       /*  *dp++ = (char )(d*125.0);
+        //  std::cerr<<d<<std::endl;
+        /*  *dp++ = (char )(d*125.0);
         *dp++ = (char )(d*125.0);
         *dp++ = (char )(d*125.0); */
     }
     std::unordered_set<const OctreeNode*> unique(result.visibleEmptyLeaves.begin(), result.visibleEmptyLeaves.end());
     unique.insert(result.occludedEmptyLeaves.begin(), result.occludedEmptyLeaves.end());
-   // assert(unique.size() == result.visibleEmptyLeaves.size() + result.occludedEmptyLeaves.size());
+    // assert(unique.size() == result.visibleEmptyLeaves.size() + result.occludedEmptyLeaves.size());
 
-   
+
     // Sauvegarde de l'image
     if (saveBitmap("output.bmp",(const char*)udepth, 256 , 256)) {
         std::cout << "output.bmp cree avec succes !" << std::endl;
@@ -257,7 +257,7 @@ ser.loadFromFile(compiled,"octrecompiled.db");
         std::cerr << "Erreur lors de la creation de l'image." << std::endl;
     }
 
-  assert(rasterizer.testBox(tbox)==false);
+    assert(rasterizer.testBox(tbox)==false);
 }
 
 void testResolutionValidation() {

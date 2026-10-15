@@ -158,7 +158,14 @@ void testCompiledSerialization() {
     CompiledOctree &compiled = *tree.compile();
 
     std::cerr<<" compiled octree"<<std::endl;
-    assert(compiled.nodeCount() == tree.leaves().size());
+    unsigned leafcount = 0;
+    for(unsigned int i=0; i<compiled.nodeCount();++i)
+    {
+        auto n = compiled.node(i);
+        if(n.children[0]==InvalidNode)leafcount++;
+}
+
+    assert(leafcount== tree. leaves().size());
     assert(compiled.locate({-0.080155, 0.07, 0.0656662}) != InvalidNode);
 
     CompiledOctree compilednminus;
