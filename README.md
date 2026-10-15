@@ -1,10 +1,11 @@
 # OPenumbra PVS octree
 
 OPenumbra contains an adaptive C++17 octree for triangle occupancy and PVS/occlusion-culling preprocessing.
+It contains few functions to processing octrees in order to transform conservatively rasterized occupied cells into solid cells (required for conservative occlusion tests).
 
 ## Masked software rasterizer
 
-The project integrates Intel's archived [MaskedOcclusionCulling](https://github.com/GameTechDev/MaskedOcclusionCulling) through CMake `FetchContent`, pinned to a known revision. It renders occupied octree leaf AABBs into the hierarchical depth buffer and uses `TestRect()` to classify empty leaves from a supplied point of view. The result also includes a debug per-pixel depth image.
+The project integrates Intel's archived [MaskedOcclusionCulling](https://github.com/GameTechDev/MaskedOcclusionCulling) through CMake `FetchContent`, pinned to a known revision. It renders solid (=conservatively occupied) octree leaf AABBs into the hierarchical depth buffer. The result also includes a debug per-pixel depth image.
 
 `ViewPoint::worldToClip` is a row-major matrix multiplying `[x y z 1]`; clip-space `w` must be positive in front of the camera. MOC requires a width divisible by 8 and a height divisible by 4.
 
@@ -16,7 +17,11 @@ RasterizedOctree frame = rasterizer.rasterize(tree, pov);
 // frame.visibleEmptyLeaves contains empty cells that may be visible from pov.
 ```
 
-The classification is conservative: empty cells are queried using projected AABB rectangles, so a visible result may include false positives. The upstream rasterizer is archived under Apache 2.0; see its repository for the license and platform notes.
+The untransformed classification is conservative: empty can cells can be queried using projected AABB rectangles, and a visible result may include false positives.
+
+Transform conservatively rasterized occupied cells into solid cells (required for conservative occlusion tests) to avoid it.
+
+The upstream rasterizer is archived under Apache 2.0; see its repository for the license and platform notes.
 
 ```bash
 cmake -S . -B build
