@@ -34,7 +34,15 @@ struct Vec3 {
 
 struct Mat4 {
     float m[16]{};
-
+    Mat4 transposed() const {
+        Mat4 out{};
+        for (int row = 0; row < 4; ++row) {
+            for (int col = 0; col < 4; ++col) {
+                out.m[col * 4 + row] = m[row * 4 + col];
+            }
+        }
+        return out;
+    }
     static Mat4 identity() {
         Mat4 out{};
         out.m[0] = 1.0f; out.m[5] = 1.0f; out.m[10] = 1.0f; out.m[15] = 1.0f;
@@ -47,19 +55,19 @@ struct Mat4 {
             for (int col = 0; col < 4; ++col) {
                 float sum = 0.0f;
                 for (int k = 0; k < 4; ++k) {
-                    sum += m[row * 4 + k] * rhs.m[k * 4 + col];
+                    sum += m[row +4* k] * rhs.m[k +4* col];
                 }
-                out.m[row * 4 + col] = sum;
+                out.m[row +4* col] = sum;
             }
         }
         return out;
     }
 
     Vec3 transformPoint(const Vec3& p) const {
-        const float x = m[0] * p.x + m[1] * p.y + m[2] * p.z + m[3];
-        const float y = m[4] * p.x + m[5] * p.y + m[6] * p.z + m[7];
-        const float z = m[8] * p.x + m[9] * p.y + m[10] * p.z + m[11];
-        const float w = m[12] * p.x + m[13] * p.y + m[14] * p.z + m[15];
+        const float x = m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12];
+        const float y = m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13];
+        const float z = m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14];
+        const float w = m[3] * p.x + m[7] * p.y + m[11] * p.z + m[15];
         if (std::abs(w) > 1e-6f) return {x / w, y / w, z / w};
         return {x, y, z};
     }
@@ -148,8 +156,22 @@ struct OctreeNode {
     ChildCode localMorton = 0; // bit 0 X, bit 1 Y, bit 2 Z
     std::uint32_t depth = 0;
     bool occupied = false;
-    //std::vector<Triangle> triangles;
 
+    //bounds of cells (interface occupied/unoccupied geometry - neigbhor dependant-)
+    std::vector<Vec3> boundpointsvert;
+    std::vector<uint> boundpointsind;
+    std::vector<uint> boundlodcount;//nblod limit of lods in vert indices
+    
+    
+    void buildBoundGeometry(int level, const uint8_t maxdepth) {
+        if(level==0 || terminal()) buildselfBoundGeometry(level, maxdepth);
+        else for(auto &c: children) c->buildBoundGeometry(level-1, maxdepth);
+    }
+    ///build Bound Geometry recursively
+    ///leafs occupied: generate interface occupied/unoccupied of cell (neigbhor dependant)
+    /// non terminal (aggregate boundpointsvert and boundpointsind and remove duplicate vertices)
+    /// return true if maxdepth-1 terminal have been reached
+    bool buildselfBoundGeometry(const uint8_t targetlevel,const uint8_t maxdepth) ;
     bool terminal() const { return children[0] == nullptr; }
     static ChildCode mask(Axis axis) { return axis == Axis::X ? X : axis == Axis::Y ? Y : Z; }
 
@@ -174,7 +196,10 @@ struct OctreeNode {
 
         for (ChildCode code : suffix) {
             if (result->terminal()) break;
-            const ChildCode next = static_cast<ChildCode>((code & ~bit) | (positive ? 0 : bit));
+            //const ChildCode next = static_cast<ChildCode>((code & ~bit) | (positive ? 0 : bit));
+
+            // CORRECTION : Il faut impérativement inverser le bit de l'axe pour rester sur la face miroir
+            const ChildCode next = static_cast<ChildCode>(code ^ bit);
             if (!result->children[next]) break;
             result = result->children[next].get();
         }
@@ -186,41 +211,55 @@ struct OctreeNode {
         const bool positive = direction == Direction::Positive;
         const OctreeNode* pivot = this;
 
-        // 1. Remontée pour trouver l'ancêtre commun (Pivot)
+        // 1. Remontée pour trouver l'ancêtre commun contenant le voisin
         while (pivot->parent != nullptr) {
             const bool onPositiveSide = (pivot->localMorton & bit) != 0;
-            if (onPositiveSide != positive) break;
+
+            // Si on cherche dans la direction Positive et qu'on est sur la face Négative (0)
+            // OU si on cherche dans la direction Négative et qu'on est sur la face Positive (bit)
+            if (onPositiveSide != positive) {
+                break; // On s'arrête ICI. pivot est le bon nœud.
+            }
             pivot = pivot->parent;
         }
-        if (pivot->parent == nullptr) return; // Pas de voisin (bord de l'octree)
 
-        // 2. Passage à la branche voisine au niveau du pivot
-        OctreeNode* neighborBranch = pivot->parent->children[pivot->localMorton ^ bit].get();
-        if (!neighborBranch) return;
+        // Si on a atteint la racine sans avoir breaké, le voisin est hors de l'octree
+        if (pivot->parent == nullptr) return;
+
+        // 2. Passage à la branche voisine au niveau du parent du pivot
+        ChildCode neighborLocalCode = pivot->localMorton ^ bit;
+        OctreeNode* current = pivot->parent->children[neighborLocalCode].get();
+        if (!current) return;
 
         // 3. Descente vers le niveau équivalent à "this"
+        // On stocke le chemin (codes Morton) parcouru depuis le pivot jusqu'à "this"
         std::vector<ChildCode> suffix;
-        for (const OctreeNode* n = this; n != pivot; n = n->parent) suffix.push_back(n->localMorton);
+        for (const OctreeNode* n = this; n != pivot; n = n->parent) {
+            suffix.push_back(n->localMorton);
+        }
         std::reverse(suffix.begin(), suffix.end());
 
-        OctreeNode* result = neighborBranch;
+        // On descend en appliquant l'effet miroir sur l'axe concerné
         for (ChildCode code : suffix) {
-            if (result->terminal()) break;
-            const ChildCode next = static_cast<ChildCode>((code & ~bit) | (positive ? 0 : bit));
-            if (!result->children[next]) break;
-            result = result->children[next].get();
+            if (current->terminal()) break; // On s'arrête si le nœud voisin est une feuille (plus grand)
+
+            // CORRECTION : Il faut impérativement inverser le bit de l'axe pour rester sur la face miroir
+            const ChildCode next = static_cast<ChildCode>(code ^ bit);
+
+            if (!current->children[next]) break;
+            current = current->children[next].get();
         }
 
         // 4. Collecte de tous les sous-voisins (si le voisin est plus subdivisé)
-        // La face adjacente correspond aux enfants qui ont (localMorton & bit) == (positive ? 0 : bit)
-        const ChildCode targetTargetBitValue = positive ? 0 : bit;
-        collectLeavesFacing(result, bit, targetTargetBitValue, out);
+        // Si on cherche à Droite (Positive), on récolte les enfants Gauches (0) du voisin
+        const ChildCode targetValue = positive ? 0 : bit;
+        collectLeavesFacing(current, bit, targetValue, out);
     }
 
 private:
     static void collectLeavesFacing(const OctreeNode* node, ChildCode bit, ChildCode targetValue, std::vector<const OctreeNode*>& out) {
         if (!node) return;
-
+        
         if (node->terminal()) {
             out.push_back(node);
             return;
@@ -239,7 +278,7 @@ class CompiledOctree;
 
 class OcclusionOctree {
 public:
-    OcclusionOctree(AABB bounds, std::size_t maxDepth = 8, std::size_t maxTrianglesPerCell = 1)
+    OcclusionOctree(AABB bounds, uint8_t maxDepth = 8, std::size_t maxTrianglesPerCell = 1)
         : maxDepth_(maxDepth), maxTrianglesPerCell_(std::max<std::size_t>(0, maxTrianglesPerCell)) {
         root_ = std::make_unique<OctreeNode>();
         root_->bounds = bounds;
@@ -247,7 +286,7 @@ public:
 
     OctreeNode* root() { return root_.get(); }
     const OctreeNode* root() const { return root_.get(); }
-
+    void buildBoundGeometryFromLevel(uint8_t fromlevel);
     const OctreeNode* locate(const Vec3& p) const {
         const OctreeNode* node = root_.get();
         while (node && !node->terminal()) {
@@ -320,7 +359,7 @@ private:
     }
 
     std::unique_ptr<OctreeNode> root_;
-    std::size_t maxDepth_;
+    uint8_t maxDepth_;
     std::size_t maxTrianglesPerCell_;
 };
 
@@ -335,6 +374,11 @@ struct CompiledNode {
     std::array<std::uint32_t, 6> neighborBegin{};
     std::array<std::uint16_t, 6> neighborCount{};
     bool occupied = false;
+    //bounds of cells (interface occupied/unoccupied geometry - neigbhor dependant-)
+    std::vector<Vec3> boundpointsvert;
+    std::vector<uint> boundpointsind;
+    std::vector<uint> boundlodcount;
+
 };
 // static_assert(std::is_trivially_copyable<CompiledNode>::value,
 //     "Erreur : CompiledNode n'est plus trivialement copiable !");
@@ -411,23 +455,23 @@ struct BoundsHash {
     std::size_t operator()(const AABB& bounds) const {
         // On utilise le centre de la boîte, qui est unique pour chaque parent
         Vec3 c = bounds.center();
-
+        
         // Extraction des bits des floats pour un hachage binaire pur
         std::uint32_t ix, iy, iz;
         memcpy(&ix, &c.x, sizeof(float));
         memcpy(&iy, &c.y, sizeof(float));
         memcpy(&iz, &c.z, sizeof(float));
-
+        
         // Combinaison de hachage de type "std::hash_combine" (façon Boost)
         std::size_t seed = 0;
         auto hash_combine = [&seed](std::uint32_t val) {
             seed ^= std::hash<std::uint32_t>{}(val) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
         };
-
+        
         hash_combine(ix);
         hash_combine(iy);
         hash_combine(iz);
-
+        
         return seed;
     }
 };
@@ -448,7 +492,7 @@ struct BoundsEqual {
 // Fonction pour générer le niveau inférieur (plus grossier)
 inline CompiledOctree* CompiledOctree::buildLevelDown(const CompiledOctree& fineLevel) {
     CompiledOctree* coarseLevel = new CompiledOctree();
-
+    
     // Hash pour regrouper les nœuds enfants par leur boîte englobante parente
     // Clé : Centre de la boîte parente (ou une clé unique basée sur les coordonnées)
     // Pour l'exemple, on utilise un système de clé basé sur la boîte parente simulée
@@ -476,7 +520,7 @@ inline CompiledOctree* CompiledOctree::buildLevelDown(const CompiledOctree& fine
     // (Note : Dans une structure de production, utilisez une clé entière/hash unique pour vos Bounds)
     std::vector<ParentCandidate> parents;
     std::unordered_map<AABB, std::size_t,BoundsHash, BoundsEqual> boundsToParentIdx; 
-
+    
     // Tableau pour savoir à quel parent appartient chaque nœud fin
     std::vector<std::size_t> childToParentMap(fineLevel.nodes_.size());
 
@@ -487,19 +531,19 @@ inline CompiledOctree* CompiledOctree::buildLevelDown(const CompiledOctree& fine
         if (it == boundsToParentIdx.end()) {
             std::size_t newIdx = parents.size();
             boundsToParentIdx[pBounds] = newIdx;
-
+            
             ParentCandidate p;
             p.bounds = pBounds;
             p.occupied = fineLevel.nodes_[i].occupied;
             p.childrenIds.push_back(i);
             parents.push_back(p);
-
+            
             childToParentMap[i] = newIdx;
         } else {
             std::size_t pIdx = it->second;
             parents[pIdx].occupied |= fineLevel.nodes_[i].occupied; // Logique "Conservative"
             parents[pIdx].childrenIds.push_back(i);
-
+            
             childToParentMap[i] = pIdx;
         }
     }
@@ -517,29 +561,29 @@ inline CompiledOctree* CompiledOctree::buildLevelDown(const CompiledOctree& fine
 
     for (std::size_t i = 0; i < parents.size(); ++i) {
         const auto& pCandidate = parents[i];
-
+        
         for (std::size_t f = 0; f < 6; ++f) {
             // Utiliser un set pour éviter les doublons de voisins (plusieurs enfants peuvent partager le même voisin)
             std::unordered_set<NodeId> uniqueCoarseNeighbors;
-
+            
             for (NodeId childId : pCandidate.childrenIds) {
                 // Étape CRITIQUE : Vérifier si cet enfant touche la face 'f' du parent.
                 // (Si l'enfant est à l'intérieur de l'octree et ne touche pas la face externe 'f', 
                 // ses voisins sur cette face sont ses frères, donc internes au parent -> On les ignore).
                 if (!childTouchesParentFace(fineLevel.nodes_[childId].bounds, pCandidate.bounds, f)) {
-                    continue;
+                    continue; 
                 }
 
                 // Parcourir les voisins de l'enfant au niveau fin
                 std::uint32_t start = fineLevel.nodes_[childId].neighborBegin[f];
                 std::uint32_t count = fineLevel.nodes_[childId].neighborCount[f];
-
+                
                 for (std::uint32_t n = 0; n < count; ++n) {
                     NodeId fineNeighborId = fineLevel.neighborStorage_[start + n];
-
+                    
                     // Trouver le parent de ce voisin fin
                     std::size_t coarseNeighborIdx = childToParentMap[fineNeighborId];
-
+                    
                     // Si le parent du voisin n'est pas le nœud actuel lui-même, c'est un voisin valide !
                     if (coarseNeighborIdx != i) {
                         uniqueCoarseNeighbors.insert(static_cast<NodeId>(coarseNeighborIdx));
@@ -565,7 +609,7 @@ inline CompiledOctree* CompiledOctree::buildLevelDown(const CompiledOctree& fine
             coarseLevel->nodes_[i].neighborBegin[f] = static_cast<std::uint32_t>(coarseLevel->neighborStorage_.size());
             auto& neighbors = coarseFaceNeighbors[i * 6 + f];
             coarseLevel->nodes_[i].neighborCount[f] = static_cast<std::uint32_t>(neighbors.size());
-
+            
             for (NodeId neighborId : neighbors) {
                 coarseLevel->neighborStorage_.push_back(neighborId);
             }
@@ -620,8 +664,10 @@ inline CompiledOctree* CompiledOctree::build(const OcclusionOctree& tree)  {
         CompiledNode& dst = out.nodes_[i];
 
         dst.bounds = src->bounds;
-        dst.occupied = src->occupied;
-
+        dst.occupied = src->occupied;        
+        dst.boundpointsind = src->boundpointsind;
+        dst.boundpointsvert = src->boundpointsvert;
+            dst.boundlodcount=src->boundlodcount;
         // Initialisation par défaut des voisins et enfants
         for (std::size_t f = 0; f < 6; ++f) {
             dst.neighborBegin[f] = 0;
@@ -696,14 +742,14 @@ class CompiledOctreeSerializer {
     private:
         static constexpr std::uint32_t MagicHeader = 0x3854434F; // "OCT8" in ASCII
         static constexpr std::uint32_t FormatVersion = 1;
-
+    
     public:
         // Writes the octree to a binary file
         static bool saveToFile(const CompiledOctree& octree, const std::string& filepath);
-
+    
         // Loads the octree from a binary file into an existing instance
         // Note: Requires modifying CompiledOctree or adding a friendship to allow data population.
         static bool loadFromFile(CompiledOctree& octree, const std::string& filepath) ;
     };
-
+    
 } // namespace openu

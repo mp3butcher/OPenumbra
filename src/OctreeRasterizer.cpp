@@ -21,10 +21,10 @@ std::array<Vec3, 8> corners(const AABB& b) {
 
 ClipVertex transform(const Vec3& p, const Mat4& m) {
     return {
-        m.m[0]*p.x + m.m[1]*p.y + m.m[2]*p.z + m.m[3],
-        m.m[4]*p.x + m.m[5]*p.y + m.m[6]*p.z + m.m[7],
-        m.m[8]*p.x + m.m[9]*p.y + m.m[10]*p.z + m.m[11],
-        m.m[12]*p.x + m.m[13]*p.y + m.m[14]*p.z + m.m[15]
+        m.m[0]*p.x + m.m[4]*p.y + m.m[8]*p.z + m.m[12],
+        m.m[1]*p.x + m.m[5]*p.y + m.m[9]*p.z + m.m[13],
+        m.m[2]*p.x + m.m[6]*p.y + m.m[10]*p.z + m.m[14],
+        m.m[3]*p.x + m.m[7]*p.y + m.m[11]*p.z + m.m[15]
     };
 }
 
@@ -35,23 +35,23 @@ Frustum extractFrustum(const Mat4& clip) {
 
     // Extraction basée sur les lignes de la matrice (indices : [ligne][colonne])
     // Gauche
-    frustum.planes[0].normal = Vec3(clip.m[3 *4+ 0] + clip.m[0 *4+ 0], clip.m[3 *4+ 1] + clip.m[0 *4+ 1], clip.m[3 *4+ 2] + clip.m[0 *4+ 2]);
-    frustum.planes[0].d      = clip.m[3 *4+ 3] + clip.m[0 *4+ 3];
+    frustum.planes[0].normal = Vec3(clip.m[3 +4* 0] + clip.m[0 +4* 0], clip.m[3 +4* 1] + clip.m[0 +4* 1], clip.m[3 +4* 2] + clip.m[0 +4* 2]);
+    frustum.planes[0].d      = clip.m[3 +4* 3] + clip.m[0 +4* 3];
     // Droite
-    frustum.planes[1].normal = Vec3(clip.m[3 *4+ 0] - clip.m[0 *4+ 0], clip.m[3 *4+ 1] - clip.m[0 *4+ 1], clip.m[3 *4+ 2] - clip.m[0 *4+ 2]);
-    frustum.planes[1].d      = clip.m[3 *4+ 3] - clip.m[0 *4+ 3];
+    frustum.planes[1].normal = Vec3(clip.m[3 +4* 0] - clip.m[0 +4* 0], clip.m[3 +4* 1] - clip.m[0 +4* 1], clip.m[3 +4* 2] - clip.m[0 +4* 2]);
+    frustum.planes[1].d      = clip.m[3 +4* 3] - clip.m[0 +4* 3];
     // Bas
-    frustum.planes[2].normal = Vec3(clip.m[3 *4+ 0] + clip.m[1 *4+ 0], clip.m[3 *4+ 1] + clip.m[1 *4+ 1], clip.m[3 *4+ 2] + clip.m[1 *4+ 2]);
-    frustum.planes[2].d      = clip.m[3 *4+ 3] + clip.m[1 *4+ 3];
+    frustum.planes[2].normal = Vec3(clip.m[3 +4* 0] + clip.m[1 +4* 0], clip.m[3 +4* 1] + clip.m[1 +4* 1], clip.m[3 +4* 2] + clip.m[1 +4* 2]);
+    frustum.planes[2].d      = clip.m[3 +4* 3] + clip.m[1 +4* 3];
     // Haut
-    frustum.planes[3].normal = Vec3(clip.m[3 *4+ 0] - clip.m[1 *4+ 0], clip.m[3 *4+ 1] - clip.m[1 *4+ 1], clip.m[3 *4+ 2] - clip.m[1 *4+ 2]);
-    frustum.planes[3].d      = clip.m[3 *4+ 3] - clip.m[1 *4+ 3];
+    frustum.planes[3].normal = Vec3(clip.m[3 +4* 0] - clip.m[1 +4* 0], clip.m[3 +4* 1] - clip.m[1 +4* 1], clip.m[3 +4* 2] - clip.m[1 +4* 2]);
+    frustum.planes[3].d      = clip.m[3 +4* 3] - clip.m[1 +4* 3];
     // Near (Proche : -1 <= z en espace homogène OpenGL)
-    frustum.planes[4].normal = Vec3(clip.m[3 *4+ 0] + clip.m[2 *4+ 0], clip.m[3 *4+ 1] + clip.m[2 *4+ 1], clip.m[3 *4+ 2] + clip.m[2 *4+ 2]);
-    frustum.planes[4].d      = clip.m[3 *4+ 3] + clip.m[2 *4+ 3];
+    frustum.planes[4].normal = Vec3(clip.m[3 +4* 0] + clip.m[2 +4* 0], clip.m[3 +4* 1] + clip.m[2 +4* 1], clip.m[3 +4* 2] + clip.m[2 +4* 2]);
+    frustum.planes[4].d      = clip.m[3 +4* 3] + clip.m[2 +4* 3];
     // Far (Lointain : z <= 1 en espace homogène OpenGL)
-    frustum.planes[5].normal = Vec3(clip.m[3 *4+ 0] - clip.m[2 *4+ 0], clip.m[3 *4+ 1] - clip.m[2 *4+ 1], clip.m[3 *4+ 2] - clip.m[2 *4+ 2]);
-    frustum.planes[5].d      = clip.m[3 *4+ 3] - clip.m[2 *4+ 3];
+    frustum.planes[5].normal = Vec3(clip.m[3 +4* 0] - clip.m[2 +4* 0], clip.m[3 +4* 1] - clip.m[2 +4* 1], clip.m[3 +4* 2] - clip.m[2 +4* 2]);
+    frustum.planes[5].d      = clip.m[3 +4* 3] - clip.m[2 +4* 3];
 
     // Normalisation indispensable pour le calcul exact des boîtes englobantes
     for (auto& plane : frustum.planes) {
@@ -194,12 +194,11 @@ std::vector<const CompiledNode*> OctreeRasterizer::visibleCells(const CompiledOc
     // CompiledOctree currently stores terminal cells, so locate once by source
     // pointer; all subsequent operations use integer IDs and flat ranges.
     // This linear lookup is outside the hot neighbor traversal loop.
-    // for (NodeId id = 0; id < tree.nodeCount(); ++id) {
-    //     const CompiledNode& n = tree.node(id);
-    //     // if (n.source && n.bounds.contains(pos)) { start = id; sourceStart = n.source; break; }
-    //     if ( n.bounds.contains(pos)) { start = id; break; }
-    // }
-    start = tree.locate(pos);
+    for (NodeId id = 0; id < tree.nodeCount(); ++id) {
+        const CompiledNode& n = tree.node(id);
+        // if (n.source && n.bounds.contains(pos)) { start = id; sourceStart = n.source; break; }
+        if ( n.bounds.contains(pos)) { start = id; break; }
+    }
     // (void)sourceStart;
     if (start == InvalidNode)
         return visible;
@@ -404,7 +403,17 @@ RasterizedOctree OctreeRasterizer::rasterize(const CompiledOctree& tree, const V
     auto pos = view.cameraPosition();
     NodeId start = InvalidNode;
     const OctreeNode* sourceStart = nullptr;
+    // CompiledOctree currently stores terminal cells, so locate once by source
+    // pointer; all subsequent operations use integer IDs and flat ranges.
+    // This linear lookup is outside the hot neighbor traversal loop.
+/*    for (NodeId id = 0; id < tree.nodeCount(); ++id) {
+        const CompiledNode& n = tree.node(id);
+        // if (n.source && n.bounds.contains(pos)) { start = id; sourceStart = n.source; break; }
+        if ( n.bounds.contains(pos)) { start = id; break; }
+    }*/
     start=tree.locate(pos);
+    // (void)sourceStart;
+    // if (start == InvalidNode)       return visible;
 
     frontier_.clear();
     visitStamp_[start] = traversalStamp_;
@@ -501,9 +510,10 @@ RasterizedOctree OctreeRasterizer::rasterize(const CompiledOctree& tree, const V
                 float ymax = std::max({q0.y * iw0, q1.y * iw1, q2.y * iw2, q3.y * iw3, q4.y * iw4, q5.y * iw5, q6.y * iw6, q7.y * iw7});
                 float faresttW =std::max({q0.w, q1.w, q2.w, q3.w, q4.w, q5.w, q6.w, q7.w});
                 float nearestW =std::min({q0.w, q1.w, q2.w, q3.w, q4.w, q5.w, q6.w, q7.w});
+             //   nearestW=std::max(0.0001f, nearestW);
+             //   if(faresttW>0.0001f && moc_->TestRect(xmin, ymin, xmax, ymax, nearestW) == MaskedOcclusionCulling::VISIBLE)
 
                 if( nearestW<0.0001f|| moc_->TestRect(xmin, ymin, xmax, ymax, std::max(0.0001f, nearestW)) == MaskedOcclusionCulling::VISIBLE)
-
             // float xmin, ymin, xmax, ymax, nearestW;
             // xmin = ymin = std::numeric_limits<float>::infinity();
             // xmax = ymax = -std::numeric_limits<float>::infinity();
@@ -581,9 +591,9 @@ void OctreeRasterizer::renderNodeRecursive(const CompiledOctree& tree, NodeId id
     }
 
     // 2. Si c'est une feuille terminale, on traite le rendu logiciel
-    if (node.children[0] == InvalidNode) {
-        if (node.occupied) {
-            // Reprenez vos vraies bornes d'origine (SANS le shrink de 0.9)
+   if (node.children[0] == InvalidNode) {
+       if(node.occupied) {
+          //  Reprenez vos vraies bornes d'origine (SANS le shrink de 0.9)
             const auto points = corners(node.bounds);
             for (std::size_t i = 0; i < points.size(); ++i)
             {
@@ -615,7 +625,29 @@ void OctreeRasterizer::renderNodeRecursive(const CompiledOctree& tree, NodeId id
                 nullptr,
                 MaskedOcclusionCulling::BACKFACE_NONE,
                 MaskedOcclusionCulling::CLIP_PLANE_NONE);
-        }
+       }
+    return;
+}
+ if (!node.boundpointsind.empty()) {
+            auto distv= (cameraPos-node.bounds.center());
+            auto dist = sqrt(distv.x*distv.x+distv.y*distv.y+distv.z*distv.z)
+                        - (node.bounds.max.x-node.bounds.min.x)*0.5f;
+
+            MaskedOcclusionCulling::VertexLayout SoAVertexLayout(12, 4, 8);// (sizeof(float), 3 * sizeof(float), 6 * sizeof(float));
+            unsigned int lodselected= (int)(0.07f*dist);
+            lodselected=std::min(2*lodselected, (unsigned int)node.boundlodcount.size()-2);
+            auto starti=node.boundlodcount[lodselected];
+            auto endi=node.boundlodcount[lodselected+1];
+            if(starti!=endi)
+            moc_->RenderTriangles(
+                reinterpret_cast<const float *>(node.boundpointsvert.data()),
+                &node.boundpointsind[starti], //node.boundpointsind
+                (endi-starti)/3, //node.boundpointsind.size() / 3,
+                clip.m,
+                MaskedOcclusionCulling::BACKFACE_NONE,// BACKFACE_CCW,
+                MaskedOcclusionCulling::CLIP_PLANE_ALL,
+                SoAVertexLayout);
+
         return;
     }
     float xMin = node.bounds.min.x, xMax = node.bounds.max.x;
@@ -637,10 +669,10 @@ void OctreeRasterizer::renderNodeRecursive(const CompiledOctree& tree, NodeId id
     float ymax = std::max({q0.y * iw0, q1.y * iw1, q2.y * iw2, q3.y * iw3, q4.y * iw4, q5.y * iw5, q6.y * iw6, q7.y * iw7});
     float faresttW =std::max({q0.w, q1.w, q2.w, q3.w, q4.w, q5.w, q6.w, q7.w});
     float nearestW =std::min({q0.w, q1.w, q2.w, q3.w, q4.w, q5.w, q6.w, q7.w});
-    //nearestW=std::max(0.0001f, nearestW);
-    //if(faresttW>0.0001f && moc_->TestRect(xmin, ymin, xmax, ymax, nearestW) == MaskedOcclusionCulling::VISIBLE)
+    // nearestW=std::max(0.0001f, nearestW);
+    // if(faresttW>0.0001f && moc_->TestRect(xmin, ymin, xmax, ymax, nearestW) == MaskedOcclusionCulling::VISIBLE)
 
-    if( nearestW<0.0001f || moc_->TestRect(xmin, ymin, xmax, ymax, std::max(0.0001f, nearestW)) == MaskedOcclusionCulling::VISIBLE)
+    if( nearestW<0.0001f|| moc_->TestRect(xmin, ymin, xmax, ymax, std::max(0.001f, nearestW)) == MaskedOcclusionCulling::VISIBLE)
     {
         // 3. C'est un nœud interne : Calcul de l'ordre de visite des 8 enfants (Front-to-Back)
         Vec3 center = node.bounds.center();
